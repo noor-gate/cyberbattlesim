@@ -164,7 +164,7 @@ class PlotTraining:
             plt.plot(episodes, means)
 
         # display.display(plt.gcf())
-        plt.show()
+        #plt.show()
 
     def episode_done(self, length):
         self.episode_durations.append(length)
@@ -182,6 +182,10 @@ def length_of_all_episodes(run):
     return [len(e) for e in run['all_episodes_rewards']]
 
 
+def average_episode_length(run):
+    """Get the average length of every episode"""
+    return np.average(length_of_all_episodes(run))
+
 def reduce(x, desired_width):
     return [np.average(c) for c in np.array_split(x, desired_width)]
 
@@ -194,6 +198,8 @@ def episodes_rewards_averaged(run):
     avg = np.average(cumrewards, axis=0)
     return list(avg)
 
+def mean_reward(run):
+    return np.average([sum(r) for r in run['all_episodes_rewards']])
 
 def episodes_lengths_for_all_runs(all_runs):
     return [length_of_all_episodes(run) for run in all_runs]

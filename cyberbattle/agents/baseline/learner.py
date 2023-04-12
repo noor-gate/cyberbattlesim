@@ -5,7 +5,7 @@
 import math
 import sys
 
-from .plotting import PlotTraining, plot_averaged_cummulative_rewards
+from .plotting import PlotTraining, plot_averaged_cummulative_rewards, mean_reward, average_episode_length
 from .agent_wrapper import AgentWrapper, EnvironmentBounds, Verbosity, ActionTrackingStateAugmentation
 import logging
 import numpy as np
@@ -270,6 +270,7 @@ def epsilon_greedy_search(
             # Take the step
             logging.debug(f"gym_action={gym_action}, action_metadata={action_metadata}")
             observation, reward, done, info = wrapped_env.step(gym_action)
+          
 
             action_type = 'exploit' if action_style == 'exploit' else 'explore'
             outcome = 'reward' if reward > 0 else 'noreward'
@@ -376,7 +377,7 @@ def transfer_learning_evaluation(
         title=f"One shot on {eval_env.name} - Trained on {trained_learner['trained_on']}"
     )
 
-    eval_random = epsilon_greedy_search(
+    """eval_random = epsilon_greedy_search(
         eval_env,
         environment_properties,
         learner=benchmark_policy,
@@ -385,11 +386,14 @@ def transfer_learning_evaluation(
         render=False,
         verbosity=Verbosity.Quiet,
         **benchmark_training_args
-    )
+    )"""
 
-    plot_averaged_cummulative_rewards(
+    print("Average reward (transfer): ", mean_reward(eval_oneshot_all))
+    print("Average episode length (transfer): ", average_episode_length(eval_oneshot_all)) 
+
+    """plot_averaged_cummulative_rewards(
         all_runs=[eval_oneshot_all, eval_random],
         title=f"Transfer learning {trained_learner['trained_on']}->{eval_env.name} "
         f'-- max_nodes={environment_properties.maximum_node_count}, '
         f'episodes={eval_episode_count},\n'
-        f"{trained_learner['learner'].all_parameters_as_string()}")
+        f"{trained_learner['learner'].all_parameters_as_string()}")"""
