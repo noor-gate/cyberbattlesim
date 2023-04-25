@@ -282,5 +282,6 @@ def new_environment(size) -> m.Environment:
     return m.Environment(
         network=m.create_network(create_chain_network(size)),
         vulnerability_library=dict([]),
-        identifiers=ENV_IDENTIFIERS
+        identifiers=ENV_IDENTIFIERS,
+        entry_node_id="start"
     )

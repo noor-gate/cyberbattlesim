@@ -92,7 +92,7 @@ def cyberbattle_model_from_traffic_graph(
     cached_password_has_changed_probability=0.1,
     traceroute_discovery_probability=0.5,
     probability_two_nodes_use_same_password_to_access_given_resource=0.8
-) -> nx.DiGraph:
+) -> Tuple[nx.DiGraph, str]:
     """Generate a random CyberBattle network model from a specified traffic (directed multi) graph.
 
     The input graph can for instance be generated with `generate_random_traffic_network`.
@@ -278,7 +278,7 @@ def cyberbattle_model_from_traffic_graph(
     # remove all the edges inherited from the network graph
     graph.clear_edges()
 
-    return graph
+    return graph, entry_node_id
 
 
 def new_environment(n_servers_per_protocol: int):
@@ -299,7 +299,7 @@ def new_environment(n_servers_per_protocol: int):
                                               alpha=np.array([(1, 1), (0.2, 0.5)], dtype=float),
                                               beta=np.array([(1000, 10), (10, 100)], dtype=float))
 
-    network = cyberbattle_model_from_traffic_graph(
+    network, entry_node_id = cyberbattle_model_from_traffic_graph(
         traffic,
         cached_rdp_password_probability=0.8,
         cached_smb_password_probability=0.7,
@@ -308,4 +308,5 @@ def new_environment(n_servers_per_protocol: int):
         probability_two_nodes_use_same_password_to_access_given_resource=0.9)
     return m.Environment(network=network,
                          vulnerability_library=dict([]),
-                         identifiers=ENV_IDENTIFIERS)
+                         identifiers=ENV_IDENTIFIERS,
+                         entry_node_id=entry_node_id)

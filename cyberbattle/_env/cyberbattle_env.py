@@ -1034,6 +1034,9 @@ class CyberBattleEnv(gym.Env):
     def __attacker_goal_reached(self) -> bool:
         goal = self.__attacker_goal
 
+        if self.get_directly_exploited_nodes() < 0.6:
+            return False
+
         if not goal:
             return False
 
@@ -1171,3 +1174,9 @@ class CyberBattleEnv(gym.Env):
 
     def close(self) -> None:
         return None
+
+    def get_directly_exploited_nodes(self) -> float:
+        total_nodes = len(self.__environment.network.nodes) - 1
+        entry_id = self.__environment.entry_node_id
+        start_connected = len(self.__environment.network.nodes[entry_id]["data"].connected_nodes)
+        return round(start_connected / total_nodes, 2)

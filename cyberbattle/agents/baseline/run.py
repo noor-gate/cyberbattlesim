@@ -21,13 +21,15 @@ import asciichartpy
 import argparse
 import sys
 import cyberbattle._env.cyberbattle_env as cyberbattle_env
+from cyberbattle.agents import train
 from cyberbattle.agents.baseline.agent_wrapper import Verbosity
 import cyberbattle.agents.baseline.agent_dql as dqla
+import cyberbattle.agents.agent_ppo as ppo
 import cyberbattle.agents.baseline.agent_tabularqlearning as tql
 import cyberbattle.agents.baseline.agent_wrapper as w
 import cyberbattle.agents.baseline.plotting as p
 import cyberbattle.agents.baseline.learner as learner
-from cyberbattle._env.defender import ScanAndReimageCompromisedMachines
+from cyberbattle._env.defender import ExternalRandomEvents, ScanAndReimageCompromisedMachines
 
 
 parser = argparse.ArgumentParser(description='Run simulation with DQL baseline agent.')
@@ -59,7 +61,7 @@ parser.add_argument('--random_agent', dest='run_random_agent', action='store_tru
 parser.add_argument('--no-random_agent', dest='run_random_agent', action='store_false', help='do not run the random agent as a baseline for comparison')
 parser.set_defaults(run_random_agent=True)
 
-parser.add_argument('--transfer_eval', action='store_true')
+parser.add_argument('--transfer_eval', action='store_false')
 
 args = parser.parse_args()
 
@@ -87,19 +89,31 @@ cyberbattlechain_defender = gym.make('CyberBattleChain-v0',
                                          scan_capacity=2,
                                          scan_frequency=5))
 
+cyberbattlechain_defender2 = gym.make('CyberBattleChain-v0',
+                                      size=10,
+                                      attacker_goal=cyberbattle_env.AttackerGoal(
+                                          own_atleast=0,
+                                          own_atleast_percent=1.0
+                                      ),
+                                      defender_constraint=cyberbattle_env.DefenderConstraint(
+                                          maintain_sla=0.80
+                                      ),
+                                      defender_agent=ExternalRandomEvents())
+
+
 cyberbattlechain_defender_eval = gym.make('CyberBattleChain-v0',
-                                     size=16,
-                                     attacker_goal=cyberbattle_env.AttackerGoal(
-                                         own_atleast=0,
-                                         own_atleast_percent=1.0
-                                     ),
-                                     defender_constraint=cyberbattle_env.DefenderConstraint(
-                                         maintain_sla=0.80
-                                     ),
-                                     defender_agent=ScanAndReimageCompromisedMachines(
-                                         probability=0.6,
-                                         scan_capacity=2,
-                                         scan_frequency=5))
+                                          size=16,
+                                          attacker_goal=cyberbattle_env.AttackerGoal(
+                                              own_atleast=0,
+                                              own_atleast_percent=1.0
+                                          ),
+                                          defender_constraint=cyberbattle_env.DefenderConstraint(
+                                              maintain_sla=0.80
+                                          ),
+                                          defender_agent=ScanAndReimageCompromisedMachines(
+                                              probability=0.6,
+                                              scan_capacity=2,
+                                              scan_frequency=5))
 
 ep = w.EnvironmentBounds.of_identifiers(
     maximum_total_credentials=22,
@@ -131,10 +145,16 @@ if args.learner == 'tql':
 
 trained_learner = None
 
+if args.learner == 'ppo':
+    all_runs.append(train.run(learner=ppo.PPOLearner(ep=ep, gamma=0.015),
+                              env=cyberbattlechain,
+                              ep=ep,
+                              title="PPO"))
+
 if args.learner == 'dql':
-# Run Deep Q-learning
+    # Run Deep Q-learning
     trained_learner = learner.epsilon_greedy_search(
-        cyberbattle_gym_env=cyberbattlechain_defender,
+        cyberbattle_gym_env=cyberbattlechain,
         environment_properties=ep,
         learner=dqla.DeepQLearnerPolicy(
             ep=ep,
@@ -153,7 +173,8 @@ if args.learner == 'dql':
         verbosity=Verbosity.Quiet,
         title="DQL"
     )
-    all_runs.append(learner.epsilon_greedy_search(
+    all_runs.append(trained_learner)
+"""  all_runs.append(learner.epsilon_greedy_search(
         cyberbattle_gym_env=cyberbattlechain_defender,
         environment_properties=ep,
         learner=trained_learner['learner'],  # torch default is 1e-2
@@ -165,17 +186,17 @@ if args.learner == 'dql':
         epsilon_exponential_decay=5000,  # 10000
         epsilon_minimum=0.10,
         verbosity=Verbosity.Quiet,
-        title="DQL"))
+        title="DQL"))"""
 
-if args.transfer_eval:
+"""if args.transfer_eval:
     learner.transfer_learning_evaluation(
-    environment_properties=ep,
-    trained_learner=cast(learner.TrainedLearner, trained_learner), 
-    eval_env=cast(cyberbattle_env.CyberBattleEnv, cyberbattlechain_defender_eval),
-    eval_epsilon=0.9,
+        environment_properties=ep,
+        trained_learner=cast(learner.TrainedLearner, trained_learner),
+        eval_env=cast(cyberbattle_env.CyberBattleEnv, cyberbattlechain_defender_eval),
+        eval_epsilon=0.9,
         eval_episode_count=args.eval_episode_count,
         iteration_count=args.iteration_count
-    )
+    )"""
 
 if args.run_random_agent:
     random_run = learner.epsilon_greedy_search(
@@ -202,3 +223,4 @@ print(asciichartpy.plot(c, {'height': 10, 'colors': colors}))
 
 print("Average reward: ", p.mean_reward(all_runs[0]))
 print("Average episode length: ", p.average_episode_length(all_runs[0]))
+print("Average direct exploit: ", p.episodes_direct_exploit_averaged(all_runs[0]))

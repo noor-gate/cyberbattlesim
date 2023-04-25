@@ -38,7 +38,7 @@ import torch.cuda
 from torch.nn.utils.clip_grad import clip_grad_norm_
 
 from .learner import Learner
-from .agent_wrapper import EnvironmentBounds
+from .agent_wrapper import AgentWrapper, EnvironmentBounds
 import cyberbattle.agents.baseline.agent_wrapper as w
 from .agent_randomcredlookup import CredentialCacheExploiter
 
@@ -259,6 +259,7 @@ class DeepQLearnerPolicy(Learner):
 
         self.credcache_policy = CredentialCacheExploiter()
 
+
     def parameters_as_string(self):
         return f'γ={self.gamma}, lr={self.learning_rate}, replaymemory={self.memory.capacity},\n' \
                f'batch={self.batch_size}, target_update={self.target_update}'
@@ -383,7 +384,7 @@ class DeepQLearnerPolicy(Learner):
             dnn_output = self.policy_net(state_batch).max(1)
             action_lookups = dnn_output[1].tolist()
             expectedq_lookups = dnn_output[0].tolist()
-
+            
         return action_lookups, expectedq_lookups
 
     def metadata_from_gymaction(self, wrapped_env, gym_action):

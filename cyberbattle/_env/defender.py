@@ -149,3 +149,6 @@ class ExternalRandomEvents(DefenderAgent):
                     node_data.firewall.incoming.append(rule_to_add)
                 elif not incoming and rule_to_add not in node_data.firewall.incoming:
                     node_data.firewall.outgoing.append(rule_to_add)
+
+class DeepQLearningDefender(DefenderAgent):
+    pass

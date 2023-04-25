@@ -1,6 +1,6 @@
 """ Generating random active directory networks"""
 import random
-from typing import Any
+from typing import Any, Tuple
 from cyberbattle.simulation.model import FirewallConfiguration, FirewallRule, Identifiers, RulePermission
 from cyberbattle.simulation import model as m
 import networkx as nx
@@ -30,7 +30,7 @@ def create_network_from_smb_traffic(
     n_clients: int,
     n_servers: int,
     n_users: int
-) -> nx.DiGraph:
+) -> Tuple[nx.DiGraph, str]:
     graph = nx.DiGraph()
     graph.add_nodes_from([f"workstation_{i}" for i in range(0, n_clients)])
     graph.add_nodes_from([f"share_{i}" for i in range(0, n_servers)])
@@ -154,7 +154,7 @@ def create_network_from_smb_traffic(
         vulnerabilities=dc_vulnerabilities(default_vulnerabilities())
     )})
 
-    return graph
+    return graph, entry_node_id
 
 
 def new_random_environment(seed: Any) -> m.Environment:
@@ -165,8 +165,10 @@ def new_random_environment(seed: Any) -> m.Environment:
     clients = random.randrange(5, 10)
     servers = random.randrange(1, 2)
     users = random.randrange(20, 100)
-    network = create_network_from_smb_traffic(clients, servers, users)
+    print("\n\n\n", clients, servers, users, "\n\n\n")
+    network, entry_node_id = create_network_from_smb_traffic(clients, servers, users)
 
     return m.Environment(network=network,
                          vulnerability_library=dict([]),
-                         identifiers=ENV_IDENTIFIERS)
+                         identifiers=ENV_IDENTIFIERS,
+                         entry_node_id=entry_node_id)

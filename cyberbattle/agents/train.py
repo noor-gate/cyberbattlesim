@@ -1,145 +1,212 @@
-# Copyright (c) Microsoft Corporation.
-# Licensed under the MIT License.
-
-"""Learner helpers and epsilon greedy search"""
 import math
 import sys
 
-from .plotting import PlotTraining, plot_averaged_cummulative_rewards, mean_reward, average_episode_length
-from .agent_wrapper import AgentWrapper, EnvironmentBounds, Verbosity, ActionTrackingStateAugmentation
+import torch
+from cyberbattle.agents import utils
+from cyberbattle.agents.agent_ppo import PPOLearner
+from cyberbattle.agents.baseline.learner import Breakdown, Learner, Outcomes, PolicyStats, RandomPolicy, Stats, TrainedLearner
+from .baseline.plotting import PlotTraining
+from .baseline.agent_wrapper import AgentWrapper, EnvironmentBounds, Verbosity, ActionTrackingStateAugmentation
 import logging
 import numpy as np
 from cyberbattle._env import cyberbattle_env
-from typing import Tuple, Optional, TypedDict, List
+from typing import Optional
 import progressbar
-import abc
+
+device = torch.device('cpu')
+if (torch.cuda.is_available()):
+    device = torch.device('cuda:0')
+    torch.cuda.empty_cache()
+
+TRAIN_EPISODE_COUNT = 1
+ITERATION_COUNT = 500
 
 
-class Learner(abc.ABC):
-    """Interface to be implemented by an epsilon-greedy learner"""
-
-    def new_episode(self) -> None:
-        return None
-
-    def end_of_episode(self, i_episode, t) -> None:
-        return None
-
-    def end_of_iteration(self, t, done) -> None:
-        return None
-
-    @abc.abstractmethod
-    def explore(self, wrapped_env: AgentWrapper) -> Tuple[str, cyberbattle_env.Action, object]:
-        """Exploration function.
-        Returns (action_type, gym_action, action_metadata) where
-        action_metadata is a custom object that gets passed to the on_step callback function"""
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def exploit(self, wrapped_env: AgentWrapper, observation) -> Tuple[str, Optional[cyberbattle_env.Action], object]:
-        """Exploit function.
-        Returns (action_type, gym_action, action_metadata) where
-        action_metadata is a custom object that gets passed to the on_step callback function"""
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def on_step(self, wrapped_env: AgentWrapper, observation, reward, done, info, action_metadata) -> None:
-        raise NotImplementedError
-
-    def parameters_as_string(self) -> str:
-        return ''
-
-    def all_parameters_as_string(self) -> str:
-        return ''
-
-    def loss_as_string(self) -> str:
-        return ''
-
-    def stateaction_as_string(self, action_metadata) -> str:
-        return ''
+def run(learner: Learner,
+        env: cyberbattle_env.CyberBattleEnv,
+        ep: EnvironmentBounds,
+        title: str) -> TrainedLearner:
+    if isinstance(learner, PPOLearner):
+        return train_policy(env, ep, learner, title, render=False)
+    elif isinstance(learner, RandomPolicy):
+        return train_epsilon_greedy(env, ep, learner, title, epsilon=1, render=False)
+    else:
+        return train_epsilon_greedy(env, ep, learner, title, epsilon=0.9, render=False)
 
 
-class RandomPolicy(Learner):
-    """A policy that does not learn and only explore"""
+def train_policy(
+        cyberbattle_gym_env: cyberbattle_env.CyberBattleEnv,
+        environment_properties: EnvironmentBounds,
+        learner: PPOLearner,
+        title: str,
+        verbosity: Verbosity = Verbosity.Quiet,
+        render=True,
+        render_last_episode_rewards_to: Optional[str] = None,
+        plot_episodes_length=True) -> TrainedLearner:
 
-    def explore(self, wrapped_env: AgentWrapper) -> Tuple[str, cyberbattle_env.Action, object]:
-        gym_action = wrapped_env.env.sample_valid_action()
-        return "explore", gym_action, None
+    wrapped_env = AgentWrapper(cyberbattle_gym_env,
+                               ActionTrackingStateAugmentation(environment_properties, cyberbattle_gym_env.reset()))
 
-    def exploit(self, wrapped_env: AgentWrapper, observation) -> Tuple[str, Optional[cyberbattle_env.Action], object]:
-        raise NotImplementedError
+    time_step = 0
+    update_timestep = 10
 
-    def on_step(self, wrapped_env: AgentWrapper, observation, reward, done, info, action_metadata):
-        return None
+    all_episodes_rewards = []
+    all_episodes_availability = []
+    all_episodes_direct_exploit = []
 
+    plot_title = f"{title} (epochs={TRAIN_EPISODE_COUNT}" \
+        + learner.parameters_as_string() + ")"
+    plottraining = PlotTraining(title=plot_title, render_each_episode=render)
 
-Breakdown = TypedDict('Breakdown', {
-    'local': int,
-    'remote': int,
-    'connect': int
-})
+    render_file_index = 1
 
-Outcomes = TypedDict('Outcomes', {
-    'reward': Breakdown,
-    'noreward': Breakdown
-})
+    for i_episode in range(1, TRAIN_EPISODE_COUNT + 1):
+        print(f"  ## Episode: {i_episode}/{TRAIN_EPISODE_COUNT} PPO "
+              f"{learner.parameters_as_string()}")
 
-PolicyStats = Outcomes
+        observation = wrapped_env.reset()
+        current_ep_reward = 0.0
+        all_rewards = []
+        all_availability = []
+        learner.new_episode()
 
-Stats = TypedDict('Stats', {
-    'exploit': Outcomes,
-    'explore': Outcomes,
-    'exploit_deflected_to_explore': int
-})
+        stats = PolicyStats(reward=Breakdown(local=0, remote=0, connect=0),
+                            noreward=Breakdown(local=0, remote=0, connect=0)
+                            )
 
-TrainedLearner = TypedDict('TrainedLearner', {
-    'all_episodes_rewards': List[List[float]],
-    'all_episodes_availability': List[List[float]],
-    'all_episodes_direct_exploit': List[float],
-    'learner': Learner,
-    'trained_on': str,
-    'title': str
-})
+        episode_ended_at = None
+        sys.stdout.flush()
 
+        bar = progressbar.ProgressBar(
+            widgets=[
+                'Episode ',
+                f'{i_episode}',
+                '|Iteration ',
+                progressbar.Counter(),
+                '|',
+                progressbar.Variable(name='reward', width=6, precision=10),
+                '|',
+                progressbar.Variable(name='last_reward_at', width=4),
+                '|',
+                progressbar.Timer(),
+                progressbar.Bar()
+            ],
+            redirect_stdout=False)
 
-def print_stats(stats):
-    """Print learning statistics"""
-    def print_breakdown(stats, actiontype: str):
-        def ratio(kind: str) -> str:
-            x, y = stats[actiontype]['reward'][kind], stats[actiontype]['noreward'][kind]
-            sum = x + y
-            if sum == 0:
-                return 'NaN'
+        for t in bar(range(1, 1 + ITERATION_COUNT)):
+
+            action_style, gym_action, action_metadata = learner.select_action(wrapped_env, observation)
+
+            if not gym_action:
+                gym_action = wrapped_env.env.sample_valid_action(kinds=[0, 1, 2])
+                action_metadata = learner.metadata_from_gymaction(wrapped_env, gym_action)
+                abstract_action, _, _, actor_state = action_metadata
+
+                with torch.no_grad():
+                    log_prob = torch.tensor(0).to(device)
+                    tensor_action = torch.tensor(abstract_action).to(device)
+                    state_val = learner.policy_old.critic(torch.tensor(actor_state).to(device))
+                    learner.buffer.states.append(torch.tensor(actor_state).to(device))
+                    learner.buffer.actions.append(tensor_action)
+                    learner.buffer.logprobs.append(log_prob)
+                    learner.buffer.state_values.append(state_val)
+
+            logging.debug(f"gym_action={gym_action}, action_metadata={action_metadata}")
+            observation, reward, done, info = wrapped_env.step(gym_action)
+
+            learner.buffer.rewards.append(reward)
+            learner.buffer.is_terminals.append(done)
+
+            outcome = 'reward' if reward > 0 else 'noreward'
+            if 'local_vulnerability' in gym_action:
+                stats[outcome]['local'] += 1
+            elif 'remote_vulnerability' in gym_action:
+                stats[outcome]['remote'] += 1
             else:
-                return f"{(x / sum):.2f}"
+                stats[outcome]['connect'] += 1
 
-        def print_kind(kind: str):
-            print(
-                f"    {actiontype}-{kind}: {stats[actiontype]['reward'][kind]}/{stats[actiontype]['noreward'][kind]} "
-                f"({ratio(kind)})")
-        print_kind('local')
-        print_kind('remote')
-        print_kind('connect')
+            time_step += 1
+            current_ep_reward += reward
+            all_rewards.append(reward)
+            all_availability.append(info['network_availability'])
+            bar.update(t, reward=current_ep_reward)
+            if reward > 0:
+                bar.update(t, last_reward_at=t)
 
-    print("  Breakdown [Reward/NoReward (Success rate)]")
-    print_breakdown(stats, 'explore')
-    print_breakdown(stats, 'exploit')
-    print(f"  exploit deflected to exploration: {stats['exploit_deflected_to_explore']}")
+            if time_step % update_timestep == 0:
+                learner.update()
+
+            if verbosity == Verbosity.Verbose or (verbosity == Verbosity.Normal and reward > 0):
+                sign = ['-', '+'][reward > 0]
+
+                print(f"    {sign} t={t} {action_style} r={reward} cum_reward:{current_ep_reward} "
+                      f"a={action_metadata}-{gym_action} "
+                      f"creds={len(observation['credential_cache_matrix'])} "
+                      f" {learner.stateaction_as_string(action_metadata)}")
+
+            if i_episode == TRAIN_EPISODE_COUNT \
+                    and render_last_episode_rewards_to is not None \
+                    and reward > 0:
+                fig = cyberbattle_gym_env.render_as_fig()
+                fig.write_image(f"{render_last_episode_rewards_to}-e{i_episode}-{render_file_index}.png")
+                render_file_index += 1
+
+            if done:
+                episode_ended_at = t
+                bar.finish(dirty=True)
+                break
+
+        sys.stdout.flush()
+
+        loss_string = learner.loss_as_string()
+        if loss_string:
+            loss_string = "loss={loss_string}"
+
+        if episode_ended_at:
+            print(f"  Episode {i_episode} ended at t={episode_ended_at} {loss_string}")
+        else:
+            print(f"  Episode {i_episode} stopped at t={TRAIN_EPISODE_COUNT} {loss_string}")
+
+        utils.print_stats_policy(stats)
+
+        all_episodes_rewards.append(all_rewards)
+        all_episodes_availability.append(all_availability)
+        all_episodes_direct_exploit.append(cyberbattle_gym_env.get_directly_exploited_nodes())
+
+        length = episode_ended_at if episode_ended_at else TRAIN_EPISODE_COUNT
+        learner.end_of_episode(i_episode=i_episode, t=length)
+        if plot_episodes_length:
+            plottraining.episode_done(length)
+        if render:
+            wrapped_env.render()
+
+    wrapped_env.close()
+    print("simulation ended")
+    if plot_episodes_length:
+        plottraining.plot_end()
+
+    return TrainedLearner(
+        all_episodes_rewards=all_episodes_rewards,
+        all_episodes_availability=all_episodes_availability,
+        all_episodes_direct_exploit=all_episodes_direct_exploit,
+        learner=learner,
+        trained_on=cyberbattle_gym_env.name,
+        title=title
+    )
 
 
-def epsilon_greedy_search(
+def train_epsilon_greedy(
     cyberbattle_gym_env: cyberbattle_env.CyberBattleEnv,
     environment_properties: EnvironmentBounds,
     learner: Learner,
     title: str,
-    episode_count: int,
-    iteration_count: int,
-    epsilon: float,
+    epsilon,
     epsilon_minimum=0.0,
     epsilon_multdecay: Optional[float] = None,
     epsilon_exponential_decay: Optional[int] = None,
     render=True,
     render_last_episode_rewards_to: Optional[str] = None,
-    verbosity: Verbosity = Verbosity.Normal,
+    verbosity: Verbosity = Verbosity.Quiet,
     plot_episodes_length=True
 ) -> TrainedLearner:
     """Epsilon greedy search for CyberBattle gym environments
@@ -191,13 +258,13 @@ def epsilon_greedy_search(
     """
 
     print(f"###### {title}\n"
-          f"Learning with: episode_count={episode_count},"
-          f"iteration_count={iteration_count},"
+          f"Learning with: episode_count={TRAIN_EPISODE_COUNT},"
+          f"iteration_count={ITERATION_COUNT},"
           f"ϵ={epsilon},"
           f'ϵ_min={epsilon_minimum}, '
           + (f"ϵ_multdecay={epsilon_multdecay}," if epsilon_multdecay else '')
           + (f"ϵ_expdecay={epsilon_exponential_decay}," if epsilon_exponential_decay else '') +
-          f"{learner.parameters_as_string()}")
+          f"{learner.parameters_as_string()})")
 
     initial_epsilon = epsilon
 
@@ -208,7 +275,7 @@ def epsilon_greedy_search(
     wrapped_env = AgentWrapper(cyberbattle_gym_env,
                                ActionTrackingStateAugmentation(environment_properties, cyberbattle_gym_env.reset()))
     steps_done = 0
-    plot_title = f"{title} (epochs={episode_count}, ϵ={initial_epsilon}, ϵ_min={epsilon_minimum}," \
+    plot_title = f"{title} (epochs={TRAIN_EPISODE_COUNT}, ϵ={initial_epsilon}, ϵ_min={epsilon_minimum}," \
         + (f"ϵ_multdecay={epsilon_multdecay}," if epsilon_multdecay else '') \
         + (f"ϵ_expdecay={epsilon_exponential_decay}," if epsilon_exponential_decay else '') \
         + learner.parameters_as_string()
@@ -216,9 +283,9 @@ def epsilon_greedy_search(
 
     render_file_index = 1
 
-    for i_episode in range(1, episode_count + 1):
+    for i_episode in range(1, TRAIN_EPISODE_COUNT + 1):
 
-        print(f"  ## Episode: {i_episode}/{episode_count} '{title}' "
+        print(f"  ## Episode: {i_episode}/{TRAIN_EPISODE_COUNT} {title} "
               f"ϵ={epsilon:.4f}, "
               f"{learner.parameters_as_string()}")
 
@@ -254,7 +321,7 @@ def epsilon_greedy_search(
             ],
             redirect_stdout=False)
 
-        for t in bar(range(1, 1 + iteration_count)):
+        for t in bar(range(1, 1 + ITERATION_COUNT)):
 
             if epsilon_exponential_decay:
                 epsilon = epsilon_minimum + math.exp(-1. * steps_done /
@@ -274,7 +341,6 @@ def epsilon_greedy_search(
             # Take the step
             logging.debug(f"gym_action={gym_action}, action_metadata={action_metadata}")
             observation, reward, done, info = wrapped_env.step(gym_action)
-          
 
             action_type = 'exploit' if action_style == 'exploit' else 'explore'
             outcome = 'reward' if reward > 0 else 'noreward'
@@ -303,7 +369,7 @@ def epsilon_greedy_search(
                       f"creds={len(observation['credential_cache_matrix'])} "
                       f" {learner.stateaction_as_string(action_metadata)}")
 
-            if i_episode == episode_count \
+            if i_episode == TRAIN_EPISODE_COUNT \
                     and render_last_episode_rewards_to is not None \
                     and reward > 0:
                 fig = cyberbattle_gym_env.render_as_fig()
@@ -326,15 +392,15 @@ def epsilon_greedy_search(
         if episode_ended_at:
             print(f"  Episode {i_episode} ended at t={episode_ended_at} {loss_string}")
         else:
-            print(f"  Episode {i_episode} stopped at t={iteration_count} {loss_string}")
+            print(f"  Episode {i_episode} stopped at t={ITERATION_COUNT} {loss_string}")
 
-        print_stats(stats)
+        utils.print_stats_epsilon(stats)
 
         all_episodes_rewards.append(all_rewards)
         all_episodes_availability.append(all_availability)
         all_episodes_direct_exploit.append(cyberbattle_gym_env.get_directly_exploited_nodes())
 
-        length = episode_ended_at if episode_ended_at else iteration_count
+        length = episode_ended_at if episode_ended_at else ITERATION_COUNT
         learner.end_of_episode(i_episode=i_episode, t=length)
         if plot_episodes_length:
             plottraining.episode_done(length)
@@ -355,51 +421,5 @@ def epsilon_greedy_search(
         all_episodes_direct_exploit=all_episodes_direct_exploit,
         learner=learner,
         trained_on=cyberbattle_gym_env.name,
-        title=plot_title
+        title=title
     )
-
-
-def transfer_learning_evaluation(
-    environment_properties: EnvironmentBounds,
-    trained_learner: TrainedLearner,
-    eval_env: cyberbattle_env.CyberBattleEnv,
-    eval_epsilon: float,
-    eval_episode_count: int,
-    iteration_count: int,
-    benchmark_policy: Learner = RandomPolicy(),
-    benchmark_training_args=dict(title="Benchmark", epsilon=1.0)
-):
-    """Evaluated a trained agent on another environment of different size"""
-
-    eval_oneshot_all = epsilon_greedy_search(
-        eval_env,
-        environment_properties,
-        learner=trained_learner['learner'],
-        episode_count=eval_episode_count,  # one shot from learnt Q matric
-        iteration_count=iteration_count,
-        epsilon=eval_epsilon,
-        render=False,
-        verbosity=Verbosity.Quiet,
-        title=f"One shot on {eval_env.name} - Trained on {trained_learner['trained_on']}"
-    )
-
-    """eval_random = epsilon_greedy_search(
-        eval_env,
-        environment_properties,
-        learner=benchmark_policy,
-        episode_count=eval_episode_count,
-        iteration_count=iteration_count,
-        render=False,
-        verbosity=Verbosity.Quiet,
-        **benchmark_training_args
-    )"""
-
-    print("Average reward (transfer): ", mean_reward(eval_oneshot_all))
-    print("Average episode length (transfer): ", average_episode_length(eval_oneshot_all)) 
-
-    """plot_averaged_cummulative_rewards(
-        all_runs=[eval_oneshot_all, eval_random],
-        title=f"Transfer learning {trained_learner['trained_on']}->{eval_env.name} "
-        f'-- max_nodes={environment_properties.maximum_node_count}, '
-        f'episodes={eval_episode_count},\n'
-        f"{trained_learner['learner'].all_parameters_as_string()}")"""

@@ -25,7 +25,7 @@ formally defined by:
 """
 
 from datetime import datetime, time
-from typing import NamedTuple, List, Dict, Optional, Union, Tuple, Iterator
+from typing import MutableSet, NamedTuple, List, Dict, Optional, Union, Tuple, Iterator
 import dataclasses
 from dataclasses import dataclass, field
 import matplotlib.pyplot as plt  # type:ignore
@@ -319,6 +319,7 @@ class NodeInfo:
     # Relative node weight used to calculate the cost of stopping this machine
     # or its services
     sla_weight: float = 1.0
+    connected_nodes: MutableSet[NodeID] = dataclasses.field(default_factory=set)
 
 
 class Identifiers(NamedTuple):
@@ -356,6 +357,7 @@ class Environment:
     network: nx.DiGraph
     vulnerability_library: VulnerabilityLibrary
     identifiers: Identifiers
+    entry_node_id: str
     creationTime: datetime = datetime.utcnow()
     lastModified: datetime = datetime.utcnow()
     # a version tag indicating the environment schema version

@@ -5,15 +5,15 @@
 
 import matplotlib.pyplot as plt  # type:ignore
 import numpy as np
-
+plt.rcParams.update({'font.family': 'Helvetica'})
 
 def new_plot(title):
     """Prepare a new plot of cumulative rewards"""
     plt.figure(figsize=(10, 8))
-    plt.ylabel('cumulative reward', fontsize=20)
-    plt.xlabel('step', fontsize=20)
-    plt.xticks(size=20)
-    plt.yticks(size=20)
+    plt.ylabel('cumulative reward', fontsize=12)
+    plt.xlabel('step', fontsize=12)
+    plt.xticks(size=12)
+    plt.yticks(size=12)
     plt.title(title, fontsize=12)
 
 
@@ -26,15 +26,15 @@ def pad(array, length):
 
 def plot_episodes_rewards_averaged(results):
     """Plot cumulative rewards for a given set of specified episodes"""
-    max_iteration_count = np.max([len(r) for r in results['all_episodes_rewards']])
-
+    # max_iteration_count = np.max([len(r) for r in results['all_episodes_rewards']])
+    max_iteration_count = 500
     all_episodes_rewards_padded = [pad(rewards, max_iteration_count) for rewards in results['all_episodes_rewards']]
     cumrewards = np.cumsum(all_episodes_rewards_padded, axis=1)
-    avg = np.average(cumrewards, axis=0)
+    avg = pad(np.average(cumrewards, axis=0), max_iteration_count)
     std = np.std(cumrewards, axis=0)
     x = [i for i in range(len(std))]
     plt.plot(x, avg, label=results['title'])
-    plt.fill_between(x, avg - std, avg + std, alpha=0.5)
+    #plt.fill_between(x, avg - std, avg + std, alpha=0.5)
 
 
 def fill_with_latest_value(array, length):
@@ -58,21 +58,23 @@ def plot_episodes_availability_averaged(results):
     plt.fill_between(x, avg - std, avg + std, alpha=0.5)
 
 
-def plot_episodes_length(learning_results):
+def plot_episodes_length(title, learning_results):
     """Plot length of every episode"""
     plt.figure(figsize=(10, 8))
     plt.ylabel('#iterations', fontsize=20)
     plt.xlabel('episode', fontsize=20)
     plt.xticks(size=20)
     plt.yticks(size=20)
-    plt.title("Length of each episode", fontsize=12)
+    plt.title(title, fontsize=12)
 
     for results in learning_results:
         iterations = [len(e) for e in results['all_episodes_rewards']]
         episode = [i for i in range(len(results['all_episodes_rewards']))]
+        #print(iterations, episode)
         plt.plot(episode, iterations, label=f"{results['title']}")
 
     plt.legend(loc="upper right")
+    plt.savefig("_".join(title.split(" ")) + ".png")
     plt.show()
 
 
@@ -89,7 +91,7 @@ def plot_all_episodes(r):
     new_plot(r['title'])
     plot_each_episode(r)
     plt.legend(loc="lower right")
-    plt.show()
+    # plt.show()
 
 
 def plot_averaged_cummulative_rewards(title, all_runs):
@@ -97,7 +99,8 @@ def plot_averaged_cummulative_rewards(title, all_runs):
     new_plot(title)
     for r in all_runs:
         plot_episodes_rewards_averaged(r)
-    plt.legend(loc="lower right")
+    plt.legend(loc="upper left")
+    plt.savefig("_".join(title.split(" ")) + ".png")
     plt.show()
 
 
@@ -164,15 +167,15 @@ class PlotTraining:
             plt.plot(episodes, means)
 
         # display.display(plt.gcf())
-        #plt.show()
+        # plt.show()
 
     def episode_done(self, length):
         self.episode_durations.append(length)
-        if self.render_each_episode:
-            self.plot_durations()
+        # if self.render_each_episode:
+        #    self.plot_durations()
 
     def plot_end(self):
-        self.plot_durations()
+        # self.plot_durations()
         plt.ioff()  # type: ignore
         # plt.show()
 
@@ -186,8 +189,13 @@ def average_episode_length(run):
     """Get the average length of every episode"""
     return np.average(length_of_all_episodes(run))
 
+
 def reduce(x, desired_width):
     return [np.average(c) for c in np.array_split(x, desired_width)]
+
+
+def episodes_direct_exploit_averaged(run):
+    return np.average(run['all_episodes_direct_exploit'])
 
 
 def episodes_rewards_averaged(run):
@@ -198,8 +206,10 @@ def episodes_rewards_averaged(run):
     avg = np.average(cumrewards, axis=0)
     return list(avg)
 
+
 def mean_reward(run):
     return np.average([sum(r) for r in run['all_episodes_rewards']])
+
 
 def episodes_lengths_for_all_runs(all_runs):
     return [length_of_all_episodes(run) for run in all_runs]

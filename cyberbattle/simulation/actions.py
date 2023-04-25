@@ -196,6 +196,7 @@ class AgentActions:
             else:
                 new_annotation = EdgeAnnotation(new_annotation.value)
         self._environment.network.add_edge(source_node_id, target_node_id, kind=new_annotation, kind_as_float=float(new_annotation.value))
+        self._environment.network.nodes[source_node_id]["data"].connected_nodes.add(target_node_id)
 
     def get_discovered_properties(self, node_id: model.NodeID) -> Set[int]:
         return self._discovered_nodes[node_id].discovered_properties
