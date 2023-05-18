@@ -470,7 +470,6 @@ class DeepQLearnerPolicy(Learner):
             _, remaining_candidate_index = random_argmax(remaining_expectedq_lookups)
             actor_index = remaining_candidate_indices[remaining_candidate_index]
             abstract_action = remaining_action_lookups[remaining_candidate_index]
-
             actor_features = unique_active_actors_features[actor_index]
 
             action_style, gym_action, metadata = self.try_exploit_at_candidate_actor_states(

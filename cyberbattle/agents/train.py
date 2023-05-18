@@ -18,12 +18,12 @@ from typing import Optional
 import progressbar
 
 device = torch.device('cpu')
-if (torch.cuda.is_available()):
+"""if (torch.cuda.is_available()):
     device = torch.device('cuda:0')
-    torch.cuda.empty_cache()
+    torch.cuda.empty_cache()"""
 
-TRAIN_EPISODE_COUNT = 1
-ITERATION_COUNT = 1
+TRAIN_EPISODE_COUNT = 20
+ITERATION_COUNT = 300
 
 
 def run(learner: Learner,

@@ -13,7 +13,7 @@ from cyberbattle._env import cyberbattle_env
 from typing import Optional
 import progressbar
 
-TEST_EPISODE_COUNT = 2
+TEST_EPISODE_COUNT = 500
 ITERATION_COUNT = 500
 
 

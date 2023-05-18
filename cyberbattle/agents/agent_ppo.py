@@ -20,9 +20,9 @@ from cyberbattle.agents.baseline.learner import Breakdown, Learner, Outcomes, Po
 import cyberbattle.agents.baseline.agent_wrapper as w
 
 device = torch.device('cpu')
-if (torch.cuda.is_available()):
+"""if (torch.cuda.is_available()):
     device = torch.device('cuda:0')
-    torch.cuda.empty_cache()
+    torch.cuda.empty_cache()"""
 
 
 def print_stats(stats):
@@ -115,8 +115,8 @@ class PPOLearner(Learner):
     def __init__(self,
                  ep: EnvironmentBounds, gamma: float):
         self.model = CyberBattleStateActionModel(ep)
-        self.policy_old = ActorCritic(len(self.model.state_space.dim_sizes), self.model.action_space.flat_size())
-        self.policy = ActorCritic(len(self.model.state_space.dim_sizes), self.model.action_space.flat_size())
+        self.policy_old = ActorCritic(len(self.model.state_space.dim_sizes), self.model.action_space.flat_size()).to(device)
+        self.policy = ActorCritic(len(self.model.state_space.dim_sizes), self.model.action_space.flat_size()).to(device)
         self.buffer = RolloutBuffer()
         self.gamma = gamma
         self.K_epochs = 40
