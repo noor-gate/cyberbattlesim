@@ -363,6 +363,9 @@ class Environment:
     # a version tag indicating the environment schema version
     version: str = VERSION_TAG
 
+    def get_nodeid_from_index(self, i):
+        return list(self.network.nodes)[i]
+
     def nodes(self) -> Iterator[Tuple[NodeID, NodeInfo]]:
         """Iterates over the nodes in the network"""
         return iterate_network_nodes(self.network)

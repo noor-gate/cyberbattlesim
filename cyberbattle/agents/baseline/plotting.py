@@ -27,7 +27,7 @@ def pad(array, length):
 def plot_episodes_rewards_averaged(results):
     """Plot cumulative rewards for a given set of specified episodes"""
     # max_iteration_count = np.max([len(r) for r in results['all_episodes_rewards']])
-    max_iteration_count = 500
+    max_iteration_count = 300
     all_episodes_rewards_padded = [pad(rewards, max_iteration_count) for rewards in results['all_episodes_rewards']]
     cumrewards = np.cumsum(all_episodes_rewards_padded, axis=1)
     avg = pad(np.average(cumrewards, axis=0), max_iteration_count)

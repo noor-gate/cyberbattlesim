@@ -22,11 +22,11 @@ def run(learner: Learner,
         ep: EnvironmentBounds,
         title: str) -> TrainedLearner:
     if isinstance(learner, PPOLearner):
-        return test_policy(env, ep, learner, title, render=True)
+        return test_policy(env, ep, learner, title, render=False)
     elif isinstance(learner, RandomPolicy):
-        return test_epsilon_greedy(env, ep, learner, title, render=True)
+        return test_epsilon_greedy(env, ep, learner, title, render=False)
     else:
-        return test_epsilon_greedy(env, ep, learner, title, render=True)
+        return test_epsilon_greedy(env, ep, learner, title, render=False)
 
 
 def test_policy(env: cyberbattle_env.CyberBattleEnv,
@@ -85,7 +85,7 @@ def test_policy(env: cyberbattle_env.CyberBattleEnv,
 
         for t in bar(range(1, 1 + ITERATION_COUNT)):
 
-            _, gym_action, action_metadata = learner.select_action(wrapped_env, observation)
+            gym_action, action_metadata = learner.select_action(wrapped_env, observation)
 
             if not gym_action:
                 gym_action = wrapped_env.env.sample_valid_action(kinds=[0, 1, 2])

@@ -42,7 +42,7 @@ USED_SLOT = numpy.int32(1)
 ActionSpaceDict = TypedDict(
     'ActionSpaceDict', {'local_vulnerability': spaces.Space,  # type: ignore
                         'remote_vulnerability': spaces.Space,  # type: ignore
-                        'connect': spaces.Space  # type: ignore
+                        'connect': spaces.Space,  # type: ignore
                         })
 
 # The type of a sample from the Action space
@@ -58,7 +58,7 @@ Action = TypedDict(
 ActionMask = TypedDict(
     'ActionMask', {'local_vulnerability': numpy.ndarray,
                    'remote_vulnerability': numpy.ndarray,
-                   'connect': numpy.ndarray
+                   'connect': numpy.ndarray,
                    })
 
 # Type of a sample from the Observation space
@@ -134,8 +134,9 @@ Observation = TypedDict(
         # The subgraph of nodes discovered so far with annotated edges
         # representing interactions that took place during the simulation. (See
         # actions.EdgeAnnotation)
-        '_explored_network': networkx.DiGraph
+        '_explored_network': networkx.DiGraph,
 
+        '_nodelist': networkx.classes.reportviews.NodeView
     })
 
 
@@ -544,6 +545,8 @@ class CyberBattleEnv(gym.Env):
             # representing interactions that took place during the simulation. (See
             # actions.EdgeAnnotation)
             '_explored_network': DummySpace(sample=networkx.DiGraph()),
+
+            '_nodelist': DummySpace(sample=networkx.classes.reportviews.NodeView(networkx.DiGraph()))
         })
 
         # reward_range: A tuple corresponding to the min and max possible rewards
@@ -710,6 +713,11 @@ class CyberBattleEnv(gym.Env):
                 target_node_id,
                 self.__index_to_remote_vulnerabilityid(vulnerability_index))
 
+            if result.reward > 0:
+                print(self.__index_to_remote_vulnerabilityid(vulnerability_index), result.reward)
+            else:
+                print("FAILED", self.__index_to_remote_vulnerabilityid(vulnerability_index), result.reward)
+                #print(self.__environment.get_node(target_node_id).vulnerabilities[self.__index_to_remote_vulnerabilityid(vulnerability_index)])
             return result
 
         elif "connect" in action:
@@ -725,6 +733,11 @@ class CyberBattleEnv(gym.Env):
                 target_node_id,
                 self.__index_to_port_name(port_index),
                 self.__credential_cache[credential_cache_index].credential)
+            
+            if result.reward > 0:
+                print("connect to port", result.reward)
+            else:
+                print("FAILED connect to port", result.reward)
 
             return result
 
@@ -753,7 +766,8 @@ class CyberBattleEnv(gym.Env):
             # (were previously returned in the 'info' dict)
             _credential_cache=self.__credential_cache,
             _discovered_nodes=self.__discovered_nodes,
-            _explored_network=self.__get_explored_network()
+            _explored_network=self.__get_explored_network(),
+            _nodelist=self.__environment.network.nodes
         )
 
         return observation
@@ -1174,6 +1188,15 @@ class CyberBattleEnv(gym.Env):
 
     def close(self) -> None:
         return None
+    
+    def node_count(self):
+        return len(list(self.__environment.network.nodes))
+
+    def get_node(self, node_id):
+        return self.__environment.network.nodes[node_id]['data']
+    
+    def get_nodeid_from_index(self, i):
+        return list(self.__environment.network.nodes)[i]
 
     def get_directly_exploited_nodes(self) -> float:
         total_nodes = len(self.__environment.network.nodes) - 1

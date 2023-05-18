@@ -167,13 +167,13 @@ class PPOLearner(Learner):
         if gym_action:
             assert actor_node is not None, 'actor_node should be set together with gym_action'
 
-            return action_style, gym_action, ChosenActionMetadata(
+            return gym_action, ChosenActionMetadata(
                 abstract_action=abstract_action,
                 actor_node=actor_node,
                 actor_features=actor_features,
                 actor_state=actor_state)
         else:
-            return "exploit[undefined]->explore", None, None
+            return None, None
 
     def select_action(self, wrapped_env, observation):
         # with torch.no_grad():
@@ -206,7 +206,7 @@ class PPOLearner(Learner):
             actor_features = unique_active_actors_features[actor_index]
             actor_state = self.get_actor_state_vector(current_global_state, actor_features)
 
-            action_style, gym_action, metadata = self.try_exploit_at_candidate_actor_states(
+            gym_action, metadata = self.try_exploit_at_candidate_actor_states(
                 wrapped_env,
                 current_global_state,
                 actor_features,
@@ -218,12 +218,12 @@ class PPOLearner(Learner):
             self.buffer.state_values.append(state_val)
 
             if gym_action:
-                return action_style, gym_action, metadata
+                return gym_action, metadata
 
             self.buffer.rewards.append(0.0)
             self.buffer.is_terminals.append(False)
 
-        return "exploit[undefined]->explore", None, None
+        return None, None
 
     def update(self):
         # Monte Carlo estimate of returns

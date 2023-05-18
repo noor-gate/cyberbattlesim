@@ -30,6 +30,7 @@ import cyberbattle.agents.baseline.agent_wrapper as w
 import cyberbattle.agents.baseline.plotting as p
 import cyberbattle.agents.baseline.learner as learner
 from cyberbattle._env.defender import ExternalRandomEvents, ScanAndReimageCompromisedMachines
+from cyberbattle.agents.ppo_defender import PPODefender
 
 
 parser = argparse.ArgumentParser(description='Run simulation with DQL baseline agent.')
@@ -89,16 +90,14 @@ cyberbattlechain_defender = gym.make('CyberBattleChain-v0',
                                          scan_capacity=2,
                                          scan_frequency=5))
 
-cyberbattlechain_defender2 = gym.make('CyberBattleChain-v0',
-                                      size=10,
-                                      attacker_goal=cyberbattle_env.AttackerGoal(
-                                          own_atleast=0,
-                                          own_atleast_percent=1.0
-                                      ),
+cyberbattlechain_defender2 = gym.make('ActiveDirectory-v0',
                                       defender_constraint=cyberbattle_env.DefenderConstraint(
                                           maintain_sla=0.80
                                       ),
-                                      defender_agent=ExternalRandomEvents())
+                                      defender_agent=ScanAndReimageCompromisedMachines(
+                                          probability=0.6,
+                                          scan_capacity=2,
+                                          scan_frequency=5))
 
 
 cyberbattlechain_defender_eval = gym.make('CyberBattleChain-v0',
@@ -115,6 +114,7 @@ cyberbattlechain_defender_eval = gym.make('CyberBattleChain-v0',
                                               scan_capacity=2,
                                               scan_frequency=5))
 
+
 ep = w.EnvironmentBounds.of_identifiers(
     maximum_total_credentials=22,
     maximum_node_count=22,
@@ -125,7 +125,7 @@ all_runs = []
 
 if args.learner == 'tql':
     all_runs.append(learner.epsilon_greedy_search(
-        cyberbattle_gym_env=cyberbattlechain,
+        cyberbattle_gym_env=cyberbattlechain_defender,
         environment_properties=ep,
         learner=tql.QTabularLearner(
             ep=ep,
@@ -135,7 +135,7 @@ if args.learner == 'tql':
         episode_count=args.training_episode_count,
         iteration_count=args.iteration_count,
         epsilon=0.90,
-        render=True,
+        render=False,
         # epsilon_multdecay=0.75,  # 0.999,
         epsilon_exponential_decay=5000,  # 10000
         epsilon_minimum=0.10,
@@ -147,6 +147,7 @@ trained_learner = None
 
 if args.learner == 'ppo':
     all_runs.append(train.run(learner=ppo.PPOLearner(ep=ep, gamma=0.015),
+                              defender=PPODefender(ep=ep, gamma=0.015),
                               env=cyberbattlechain,
                               ep=ep,
                               title="PPO"))
@@ -154,7 +155,7 @@ if args.learner == 'ppo':
 if args.learner == 'dql':
     # Run Deep Q-learning
     trained_learner = learner.epsilon_greedy_search(
-        cyberbattle_gym_env=cyberbattlechain,
+        cyberbattle_gym_env=cyberbattlechain_defender2,
         environment_properties=ep,
         learner=dqla.DeepQLearnerPolicy(
             ep=ep,

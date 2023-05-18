@@ -5,6 +5,8 @@
 features extracted from the environment observations"""
 
 from cyberbattle._env.cyberbattle_env import EnvironmentBounds
+from cyberbattle.simulation.actions import DefenderAgentActions
+from cyberbattle.simulation.model import Environment, NodeInfo
 from typing import Optional, List, Tuple
 import enum
 import numpy as np
@@ -223,6 +225,28 @@ class Feature_owned_node_count(Feature):
         return [len(owned_nodes_indices)]
 
 
+class Feature_reimaged_node(Feature):
+    """ bitmask indicating which nodes have been reimaged """
+
+    def __init__(self, p: EnvironmentBounds):
+        super().__init__(p, [p.maximum_node_count + 1])
+
+    def get(self, a: StateAugmentation, node):
+        nodes = a.observation['_nodelist']
+        bitmask = []
+        for _, nodevalue in nodes.items():
+            node_data: NodeInfo = nodevalue['data']
+            if node_data.last_reimaging:
+                bitmask.append(1)
+            else:
+                bitmask.append(0)
+            if len(node_data.vulnerabilities.keys()) > 0:
+                bitmask.append(1)
+            else:
+                bitmask.append(0)
+        return bitmask
+
+
 class ConcatFeatures(Feature):
     """ Concatenate a list of features into a single feature
     Parameters:
@@ -319,7 +343,7 @@ class RavelEncoding(FeatureEncoder):
         super().__init__(p, [self.ravelled_size])
 
     def vector_to_index(self, feature_vector):
-        #print(len(self.dim_sizes), len(feature_vector))
+        # print(len(self.dim_sizes), len(feature_vector))
         assert len(self.dim_sizes) == len(feature_vector), \
             f'feature vector of size {len(feature_vector)}, ' \
             f'expecting {len(self.dim_sizes)}: {feature_vector} -- {self.dim_sizes}'

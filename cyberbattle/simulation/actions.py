@@ -465,6 +465,11 @@ class AgentActions:
             local_or_remote=True,
             failed_penalty=Penalty.LOCAL_EXPLOIT_FAILED,
             throw_if_vulnerability_not_present=False)
+        
+        if result.reward > 0:
+            print(vulnerability_id, result.reward)
+        else:
+            print("FAILED", vulnerability_id, result.reward)
 
         return result
 
@@ -649,6 +654,10 @@ class DefenderAgentActions:
         # map nodes being reimaged to the remaining number of steps to completion
         self.node_reimaging_progress: Dict[model.NodeID, int] = dict()
 
+        self.node_vuln_fixing_progress: int = 0
+
+        self.fixing = False
+
         # Last calculated availability of the network
         self.__network_availability: float = 1.0
 
@@ -657,6 +666,21 @@ class DefenderAgentActions:
     @property
     def network_availability(self):
         return self.__network_availability
+    
+    def get_nodes(self):
+        return list(self._environment.network.nodes)
+    
+    def fix_vulnerability(self, node_id: model.NodeID):
+        """ Fix a vulnerability at a node """
+        node_info = self._environment.get_node(node_id)
+        if len(node_info.vulnerabilities) > 0 and not self.fixing:
+            node_info.vulnerabilities.popitem()
+            self.node_vuln_fixing_progress = self.REIMAGING_DURATION
+            self.fixing = True
+            # print("vuln fixing")
+        # else:
+            # print("tried to fix vuln")
+        self._environment.network.nodes[node_id].update({'data': node_info})
 
     def reimage_node(self, node_id: model.NodeID):
         """Re-image a computer node"""
@@ -674,6 +698,12 @@ class DefenderAgentActions:
 
     def on_attacker_step_taken(self):
         """Function to be called each time a step is take in the simulation"""
+
+        if self.node_vuln_fixing_progress > 0:
+            self.node_vuln_fixing_progress -= 1
+        else:
+            self.fixing = False
+
         for node_id in list(self.node_reimaging_progress.keys()):
             remaining_steps = self.node_reimaging_progress[node_id]
             if remaining_steps > 0:

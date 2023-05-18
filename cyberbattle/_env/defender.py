@@ -6,6 +6,7 @@ Defines stock defender agents for the CyberBattle simulation.
 """
 import random
 import numpy
+import torch
 from abc import abstractmethod
 from cyberbattle.simulation.model import Environment
 from cyberbattle.simulation.actions import DefenderAgentActions
@@ -71,6 +72,7 @@ class ExternalRandomEvents(DefenderAgent):
             # Have a boolean remove_vulnerability decide if we will remove one.
             remove_vulnerability = numpy.random.random() <= probability
             if remove_vulnerability and len(node_data.vulnerabilities) > 0:
+                print("patch vulnerability")
                 choice = random.choice(list(node_data.vulnerabilities))
                 node_data.vulnerabilities.pop(choice)
 
@@ -78,6 +80,7 @@ class ExternalRandomEvents(DefenderAgent):
         for node_id, node_data in environment.nodes():
             remove_service = numpy.random.random() <= probability
             if remove_service and len(node_data.services) > 0:
+                print("stop service")
                 service = random.choice(node_data.services)
                 actions.stop_service(node_id, service.name)
 
@@ -90,6 +93,7 @@ class ExternalRandomEvents(DefenderAgent):
             # If we have decided that we will add a vulnerability and there are new vulnerabilities not already
             # on the node, then add them.
             if add_vulnerability and len(new_vulnerabilities) > 0:
+                print("plant vulnerability")
                 new_vulnerability = random.choice(new_vulnerabilities)
                 node_data.vulnerabilities[new_vulnerability] = \
                     environment.vulnerability_library[new_vulnerability]
@@ -149,6 +153,3 @@ class ExternalRandomEvents(DefenderAgent):
                     node_data.firewall.incoming.append(rule_to_add)
                 elif not incoming and rule_to_add not in node_data.firewall.incoming:
                     node_data.firewall.outgoing.append(rule_to_add)
-
-class DeepQLearningDefender(DefenderAgent):
-    pass
