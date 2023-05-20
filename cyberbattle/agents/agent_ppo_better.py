@@ -25,9 +25,9 @@ from cyberbattle.agents.baseline.learner import Breakdown, Learner, Outcomes, Po
 import cyberbattle.agents.baseline.agent_wrapper as w
 
 device = torch.device('cpu')
-if (torch.cuda.is_available()):
-    device = torch.device('cuda:0')
-    torch.cuda.empty_cache()
+#if (torch.cuda.is_available()):
+#    device = torch.device('cuda:0')
+#    torch.cuda.empty_cache()
 
 
 def print_stats(stats):
@@ -326,7 +326,7 @@ class PPOLearnerBetter(Learner):
         for _ in range(self.K_epochs):
             indexes = np.random.permutation(actions.size(0))
             # Train PPO and icm
-            for i in range(0, len(indexes), self.ppo_batch_size):
+            for i in range(0, len(indexes), len(indexes)):
                 batch_ind = indexes[i:i + self.ppo_batch_size]
                 batch_curr_states = curr_states[batch_ind, :]
                 batch_actions = actions[batch_ind]

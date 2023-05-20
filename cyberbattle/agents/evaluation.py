@@ -26,7 +26,7 @@ def eval_agent(training_envs, test_env, ep, network, defender=None):
     agents = [(learner.RandomPolicy(), "Random"),
               (tql.QTabularLearner(ep=ep, gamma=0.015, learning_rate=0.01, exploit_percentile=100), "Tabular Q-Learning"),
               (dqla.DeepQLearnerPolicy(ep=ep, gamma=0.015, replay_memory_size=10000, target_update=10, batch_size=512, learning_rate=0.01), "Deep Q-Learning"),
-              (PPOLearner(ep=ep, gamma=0.015), "PPO"),
+              (ppo.PPOLearner(ep=ep, gamma=0.015), "PPO"),
               (PPOLearnerBetter(ep=ep, gamma=0.015), "PPO Curiosity")]
 
     trained_agents = []

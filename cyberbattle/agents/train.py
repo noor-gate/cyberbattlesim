@@ -44,7 +44,7 @@ def run(learner: Learner,
 def train_policy(
         cyberbattle_gym_env: cyberbattle_env.CyberBattleEnv,
         environment_properties: EnvironmentBounds,
-        learner: PPOLearnerBetter,
+        learner: PPOLearner,
         defender: Optional[PPODefender],
         title: str,
         verbosity: Verbosity = Verbosity.Quiet,
@@ -763,7 +763,7 @@ def train_policy_curiosity(
                 bar.update(t, last_reward_at=t)
 
             if time_step % update_timestep == 0:
-                learner.update()
+                learner.update(time_step)
 
             if time_step % update_timestep == 0:
                 if defender:
