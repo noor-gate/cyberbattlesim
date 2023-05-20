@@ -5,7 +5,7 @@ import torch.nn as nn
 
 class ICM(nn.Module):
     # Add swish activation
-    def __init__(self, state_dim, action_dim, encoding_size=64, num_layers=2, activation=nn.Tanh()):
+    def __init__(self, state_dim, action_dim, encoding_size=32, num_layers=2, activation=nn.Tanh()):
         super().__init__()
         self.act_dim = action_dim
         # Encoder
@@ -21,14 +21,14 @@ class ICM(nn.Module):
         self.encoder = nn.Sequential(*layers)
 
         # Inverse model
-        self.fc_i1 = nn.Linear(encoding_size * 2, 64)
+        self.fc_i1 = nn.Linear(encoding_size * 2, 32)
         self.act_i1 = activation
-        self.fc_i2 = nn.Linear(64, action_dim)
+        self.fc_i2 = nn.Linear(32, action_dim)
 
         # Forward model
-        self.fc_f1 = nn.Linear(encoding_size + action_dim, 64)
+        self.fc_f1 = nn.Linear(encoding_size + action_dim, 32)
         self.act_f1 = activation
-        self.fc_f2 = nn.Linear(64, encoding_size)
+        self.fc_f2 = nn.Linear(32, encoding_size)
 
     def forward(self, act, curr_obs, next_obs, mask):
         # Inverse model

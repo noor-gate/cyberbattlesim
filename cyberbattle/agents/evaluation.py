@@ -26,7 +26,7 @@ def eval_agent(training_envs, test_env, ep, network, defender=None):
     agents = [(learner.RandomPolicy(), "Random"),
               (tql.QTabularLearner(ep=ep, gamma=0.015, learning_rate=0.01, exploit_percentile=100), "Tabular Q-Learning"),
               (dqla.DeepQLearnerPolicy(ep=ep, gamma=0.015, replay_memory_size=10000, target_update=10, batch_size=512, learning_rate=0.01), "Deep Q-Learning"),
-              (PPOLearnerBetter(ep=ep, gamma=0.015), "PPO"),
+              (ppo.PPOLearner(ep=ep, gamma=0.015), "PPO"),
               (PPOLearnerBetter(ep=ep, gamma=0.015), "PPO Curiosity")]
 
     trained_agents = []
@@ -211,7 +211,7 @@ test_env.seed(1)
 
 eval_agent(training_envs, test_env, ep, "Active directory with scan and compromise defender")
 
-"""
+
 # COMPARING DEFENDERS
 
 training_envs = [gym.make('CyberBattleChain-v0',
@@ -258,3 +258,4 @@ run = train.run(agent, test_env_2, ep, "Scan and compromise")
 all_runs.append(run)
 
 p.plot_averaged_cummulative_rewards(f"Chain cumulative training rewards", all_runs)
+"""
