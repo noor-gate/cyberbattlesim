@@ -25,9 +25,9 @@ from cyberbattle.agents.baseline.learner import Breakdown, Learner, Outcomes, Po
 import cyberbattle.agents.baseline.agent_wrapper as w
 
 device = torch.device('cpu')
-if (torch.cuda.is_available()):
-    device = torch.device('cuda:0')
-    torch.cuda.empty_cache()
+#if (torch.cuda.is_available()):
+#    device = torch.device('cuda:0')
+#    torch.cuda.empty_cache()
 
 
 def print_stats(stats):

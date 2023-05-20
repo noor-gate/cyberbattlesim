@@ -58,8 +58,8 @@ def eval_agent(training_envs, test_env, ep, network, defender=None):
         results.write(f"Average training direct exploit: {round(np.average(direct_exploit_avg), 2)}\n\n")
 
     p.plot_averaged_cummulative_rewards(f"{network} cumulative training rewards", all_runs)
-    p.plot_episodes_length(f"{network} training episode lengths", all_runs)
-    """
+    #p.plot_episodes_length(f"{network} training episode lengths", all_runs)
+
     all_runs = []
     results.write("\n\n\n---- TESTING ----\n\n\n")
 
@@ -67,7 +67,7 @@ def eval_agent(training_envs, test_env, ep, network, defender=None):
         if title == "Random":
             run = train.run(agent, test_env, ep, title)
         else:
-            run = test.run(agent, test_env, ep, title)
+            run = train.run(agent, test_env, ep, title)
         all_runs.append(run)
 
         results.write(run["title"] + "\n")
@@ -76,7 +76,7 @@ def eval_agent(training_envs, test_env, ep, network, defender=None):
         results.write(f"Average test direct exploit: {round(p.episodes_direct_exploit_averaged(run), 2)}\n\n\n")
 
     p.plot_averaged_cummulative_rewards(f"{network} cumulative test rewards", all_runs)
-    p.plot_episodes_length(f"{network} test episode lengths", all_runs)"""
+    #p.plot_episodes_length(f"{network} test episode lengths", all_runs)
 
     results.close()
 
@@ -98,6 +98,7 @@ ep = w.EnvironmentBounds.of_identifiers(
 # eval_agent(training_envs, test_env, ep, "Chain without defender")
 
 eval_agent(training_envs, test_env, ep, "Chain with PPO defender", defender=PPODefender(ep=ep, gamma=0.15, env=training_envs[-1]))
+#eval_agent(training_envs, test_env, ep, "Chain without defender")
 """
 # WITH EXTERNAL RANDOM EVENTS DEFENDER
 

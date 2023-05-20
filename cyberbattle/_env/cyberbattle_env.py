@@ -982,7 +982,6 @@ class CyberBattleEnv(gym.Env):
     def is_action_valid(self, action, action_mask: Optional[ActionMask] = None) -> bool:
         """Determine if an action is valid (i.e. parameters are in expected ranges)"""
         assert 1 == len(action.keys())
-
         kind = DiscriminatedUnion.kind(action)
         in_range = False
         n_discovered_nodes = len(self.__discovered_nodes)

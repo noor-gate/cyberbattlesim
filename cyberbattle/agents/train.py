@@ -18,11 +18,11 @@ from typing import Optional
 import progressbar
 
 device = torch.device('cpu')
-if (torch.cuda.is_available()):
+"""if (torch.cuda.is_available()):
     device = torch.device('cuda:0')
-    torch.cuda.empty_cache()
+    torch.cuda.empty_cache()"""
 
-TRAIN_EPISODE_COUNT = 1
+TRAIN_EPISODE_COUNT = 20
 ITERATION_COUNT = 300
 
 
@@ -641,3 +641,192 @@ def train_epsilon_greedy(
         trained_on=cyberbattle_gym_env.name,
         title=title
     )
+<<<<<<< HEAD
+=======
+
+
+def train_policy_curiosity(
+        cyberbattle_gym_env: cyberbattle_env.CyberBattleEnv,
+        environment_properties: EnvironmentBounds,
+        learner: PPOLearner,
+        defender: Optional[PPODefender],
+        title: str,
+        verbosity: Verbosity = Verbosity.Quiet,
+        render=True,
+        render_last_episode_rewards_to: Optional[str] = None,
+        plot_episodes_length=True) -> TrainedLearner:
+
+    wrapped_env = AgentWrapper(cyberbattle_gym_env,
+                               ActionTrackingStateAugmentation(environment_properties, cyberbattle_gym_env.reset()))
+    defender_actuator = DefenderAgentActions(cyberbattle_gym_env.environment)
+
+    time_step = 0
+    update_timestep = 10
+
+    all_episodes_rewards = []
+    all_episodes_availability = []
+    all_episodes_direct_exploit = []
+
+    plot_title = f"{title} (epochs={TRAIN_EPISODE_COUNT}" \
+        + learner.parameters_as_string() + ")"
+    plottraining = PlotTraining(title=plot_title, render_each_episode=render)
+
+    render_file_index = 1
+
+    for i_episode in range(1, TRAIN_EPISODE_COUNT + 1):
+        print(f"  ## Episode: {i_episode}/{TRAIN_EPISODE_COUNT} PPO "
+              f"{learner.parameters_as_string()}")
+
+        observation = wrapped_env.reset()
+        current_ep_reward = 0.0
+        all_rewards = []
+        all_availability = []
+        learner.new_episode()
+
+        stats = PolicyStats(reward=Breakdown(local=0, remote=0, connect=0),
+                            noreward=Breakdown(local=0, remote=0, connect=0)
+                            )
+
+        episode_ended_at = None
+        sys.stdout.flush()
+
+        bar = progressbar.ProgressBar(
+            widgets=[
+                'Episode ',
+                f'{i_episode}',
+                '|Iteration ',
+                progressbar.Counter(),
+                '|',
+                progressbar.Variable(name='reward', width=6, precision=10),
+                '|',
+                progressbar.Variable(name='last_reward_at', width=4),
+                '|',
+                progressbar.Timer(),
+                progressbar.Bar()
+            ],
+            redirect_stdout=False)
+
+        for t in bar(range(1, 1 + ITERATION_COUNT)):
+
+            # defender action
+            defender_reward = 0
+            if defender:
+                defender_actuator.on_attacker_step_taken()
+                defender_reward = defender.step(wrapped_env, observation, defender_actuator)
+
+            # attacker action
+            gym_action, action_metadata = learner.select_action(wrapped_env, observation)
+
+            if not gym_action:
+                gym_action = wrapped_env.env.sample_valid_action(kinds=[0, 1, 2])
+                action_metadata = learner.metadata_from_gymaction(wrapped_env, gym_action)
+                abstract_action, _, _, actor_state = action_metadata
+
+                with torch.no_grad():
+                    log_prob = torch.tensor(0).to(device)
+                    tensor_action = torch.tensor(abstract_action).to(device)
+                    state_val = learner.policy_old.critic(torch.tensor(actor_state).to(device))
+                    learner.buffer.states.append(torch.tensor(actor_state).to(device))
+                    learner.buffer.actions.append(tensor_action)
+                    learner.buffer.logprobs.append(log_prob)
+                    learner.buffer.state_values.append(state_val)
+
+            logging.debug(f"gym_action={gym_action}, action_metadata={action_metadata}")
+            observation, reward, done, info = wrapped_env.step(gym_action)
+
+            # if defender:
+            #    print(f"defender_action={defender_action} attacker_action={gym_action} reward={reward}")
+
+            # attacker reward
+            learner.buffer.rewards.append(reward - defender_reward)
+            learner.buffer.is_terminals.append(done)
+
+            # defender reward is negative of attacker
+            if defender:
+                defender.buffer.rewards.append(defender_reward - reward)
+                defender.buffer.is_terminals.append(done)
+
+            outcome = 'reward' if reward > 0 else 'noreward'
+            if 'local_vulnerability' in gym_action:
+                stats[outcome]['local'] += 1
+            elif 'remote_vulnerability' in gym_action:
+                stats[outcome]['remote'] += 1
+            else:
+                stats[outcome]['connect'] += 1
+
+            # if reward > 0:
+                # print(gym_action)
+
+            time_step += 1
+            current_ep_reward += reward
+            all_rewards.append(reward)
+            all_availability.append(info['network_availability'])
+            bar.update(t, reward=current_ep_reward)
+            if reward > 0:
+                bar.update(t, last_reward_at=t)
+
+            if time_step % update_timestep == 0:
+                learner.update(time_step)
+
+            if time_step % update_timestep == 0:
+                if defender:
+                    defender.update()
+
+            if verbosity == Verbosity.Verbose or (verbosity == Verbosity.Normal and reward > 0):
+                sign = ['-', '+'][reward > 0]
+
+                print(f"    {sign} t={t} r={reward} cum_reward:{current_ep_reward} "
+                      f"a={action_metadata}-{gym_action} "
+                      f"creds={len(observation['credential_cache_matrix'])} "
+                      f" {learner.stateaction_as_string(action_metadata)}")
+
+            if i_episode == TRAIN_EPISODE_COUNT \
+                    and render_last_episode_rewards_to is not None \
+                    and reward > 0:
+                fig = cyberbattle_gym_env.render_as_fig()
+                fig.write_image(f"{render_last_episode_rewards_to}-e{i_episode}-{render_file_index}.png")
+                render_file_index += 1
+
+            if done:
+                episode_ended_at = t
+                bar.finish(dirty=True)
+                break
+
+        sys.stdout.flush()
+
+        loss_string = learner.loss_as_string()
+        if loss_string:
+            loss_string = "loss={loss_string}"
+
+        if episode_ended_at:
+            print(f"  Episode {i_episode} ended at t={episode_ended_at} {loss_string}")
+        else:
+            print(f"  Episode {i_episode} stopped at t={TRAIN_EPISODE_COUNT} {loss_string}")
+
+        utils.print_stats_policy(stats)
+
+        all_episodes_rewards.append(all_rewards)
+        all_episodes_availability.append(all_availability)
+        all_episodes_direct_exploit.append(cyberbattle_gym_env.get_directly_exploited_nodes())
+
+        length = episode_ended_at if episode_ended_at else TRAIN_EPISODE_COUNT
+        learner.end_of_episode(i_episode=i_episode, t=length)
+        if plot_episodes_length:
+            plottraining.episode_done(length)
+        if render:
+            wrapped_env.render()
+
+    wrapped_env.close()
+    print("simulation ended")
+    if plot_episodes_length:
+        plottraining.plot_end()
+
+    return TrainedLearner(
+        all_episodes_rewards=all_episodes_rewards,
+        all_episodes_availability=all_episodes_availability,
+        all_episodes_direct_exploit=all_episodes_direct_exploit,
+        learner=learner,
+        trained_on=cyberbattle_gym_env.name,
+        title=title
+    )
+>>>>>>> 4a184ed750bf2d22bf3911c307de2092712a9af8

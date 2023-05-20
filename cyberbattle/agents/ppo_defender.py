@@ -20,9 +20,9 @@ from cyberbattle.simulation.actions import DefenderAgentActions
 from cyberbattle.simulation.model import Environment, NodeID
 
 device = torch.device('cpu')
-if (torch.cuda.is_available()):
-    device = torch.device('cuda:0')
-    torch.cuda.empty_cache()
+#if (torch.cuda.is_available()):
+#    device = torch.device('cuda:0')
+#    torch.cuda.empty_cache()
 
 
 TRAIN_EPISODE_COUNT = 10

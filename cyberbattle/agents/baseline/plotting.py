@@ -74,8 +74,8 @@ def plot_episodes_length(title, learning_results):
         plt.plot(episode, iterations, label=f"{results['title']}")
 
     plt.legend(loc="upper right")
-    plt.savefig("_".join(title.split(" ")) + ".png")
-    plt.show()
+    plt.savefig("results" + "/" + "_".join(title.split(" ")) + ".png")
+    #plt.show()
 
 
 def plot_each_episode(results):
@@ -100,8 +100,8 @@ def plot_averaged_cummulative_rewards(title, all_runs):
     for r in all_runs:
         plot_episodes_rewards_averaged(r)
     plt.legend(loc="upper left")
-    plt.savefig("_".join(title.split(" ")) + ".png")
-    plt.show()
+    plt.savefig("results/" + "_".join(title.split(" ")) + ".png")
+    #plt.show()
 
 
 def plot_averaged_availability(title, all_runs):
