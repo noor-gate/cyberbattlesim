@@ -133,6 +133,9 @@ class AgentActions:
             if node.agent_installed:
                 self.__mark_node_as_owned(i, PrivilegeLevel.LocalUser)
 
+    def all_nodes(self):
+        return self._environment.nodes()
+
     def discovered_nodes(self) -> Iterator[Tuple[model.NodeID, model.NodeInfo]]:
         for node_id in self._discovered_nodes:
             yield (node_id, self._environment.get_node(node_id))

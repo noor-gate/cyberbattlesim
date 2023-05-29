@@ -384,7 +384,6 @@ class Environment:
                             self.network.nodes.items()],
                 cmap=plt.cm.Oranges)  # type:ignore
 
-
 def create_network(nodes: Dict[NodeID, NodeInfo]) -> nx.DiGraph:
     """Create a network with a set of nodes and no edges"""
     graph = nx.DiGraph()

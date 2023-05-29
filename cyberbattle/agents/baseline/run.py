@@ -30,7 +30,7 @@ import cyberbattle.agents.baseline.agent_wrapper as w
 import cyberbattle.agents.baseline.plotting as p
 import cyberbattle.agents.baseline.learner as learner
 from cyberbattle._env.defender import ExternalRandomEvents, ScanAndReimageCompromisedMachines
-from cyberbattle.agents.ppo_defender import PPODefender
+from cyberbattle.agents.defenders.ppo_defender import PPODefender
 
 
 parser = argparse.ArgumentParser(description='Run simulation with DQL baseline agent.')

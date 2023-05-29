@@ -7,6 +7,7 @@
 import time
 import copy
 import logging
+from matplotlib import pyplot as plt
 import networkx
 from networkx import convert_matrix
 from typing import NamedTuple, Optional, Tuple, List, Dict, TypeVar, TypedDict, cast
@@ -417,7 +418,7 @@ class CyberBattleEnv(gym.Env):
         throws_on_invalid_actions - whether to raise an exception if the step function attempts an invalid action (e.g., running an attack from a node that's not owned)
                                     if set to False a negative reward is returned instead.
         """
-
+        
         # maximum number of entities in a given environment
         self.__bounds = EnvironmentBounds.of_identifiers(
             maximum_total_credentials=maximum_total_credentials,

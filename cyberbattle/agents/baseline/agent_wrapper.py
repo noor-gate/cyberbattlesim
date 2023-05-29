@@ -343,7 +343,7 @@ class RavelEncoding(FeatureEncoder):
         super().__init__(p, [self.ravelled_size])
 
     def vector_to_index(self, feature_vector):
-        # print(len(self.dim_sizes), len(feature_vector))
+        print(len(self.dim_sizes), len(feature_vector))
         assert len(self.dim_sizes) == len(feature_vector), \
             f'feature vector of size {len(feature_vector)}, ' \
             f'expecting {len(self.dim_sizes)}: {feature_vector} -- {self.dim_sizes}'

@@ -2,6 +2,7 @@
 # Licensed under the MIT License.
 
 """ Generating random graphs"""
+from matplotlib import pyplot as plt
 from cyberbattle.simulation.model import Identifiers, NodeID, CredentialID, PortName, FirewallConfiguration, FirewallRule, RulePermission
 import numpy as np
 import networkx as nx
@@ -277,11 +278,10 @@ def cyberbattle_model_from_traffic_graph(
 
     # remove all the edges inherited from the network graph
     graph.clear_edges()
-
     return graph, entry_node_id
 
 
-def new_environment(n_servers_per_protocol: int):
+def new_environment(seed, n_servers_per_protocol: int):
     """Create a new simulation environment based on
     a randomly generated network topology.
 
@@ -289,8 +289,8 @@ def new_environment(n_servers_per_protocol: int):
     here for the statistical generative model
     were arbirarily picked. We recommend exploring different values for those parameters.
     """
-    traffic = generate_random_traffic_network(seed=None,
-                                              n_clients=50,
+    traffic = generate_random_traffic_network(seed=seed,
+                                              n_clients=30,
                                               n_servers={
                                                   "SMB": n_servers_per_protocol,
                                                   "HTTP": n_servers_per_protocol,

@@ -28,20 +28,6 @@ class Learner(abc.ABC):
         return None
 
     @abc.abstractmethod
-    def explore(self, wrapped_env: AgentWrapper) -> Tuple[str, cyberbattle_env.Action, object]:
-        """Exploration function.
-        Returns (action_type, gym_action, action_metadata) where
-        action_metadata is a custom object that gets passed to the on_step callback function"""
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def exploit(self, wrapped_env: AgentWrapper, observation) -> Tuple[str, Optional[cyberbattle_env.Action], object]:
-        """Exploit function.
-        Returns (action_type, gym_action, action_metadata) where
-        action_metadata is a custom object that gets passed to the on_step callback function"""
-        raise NotImplementedError
-
-    @abc.abstractmethod
     def on_step(self, wrapped_env: AgentWrapper, observation, reward, done, info, action_metadata) -> None:
         raise NotImplementedError
 
