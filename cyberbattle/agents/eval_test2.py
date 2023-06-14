@@ -36,7 +36,7 @@ def eval_agent(training_envs, test_envs, ep, network, defender=None):
 
     trained_agents = []
 
-    results = open("results_chain_train.txt", "a")
+    results = open("results_active_train.txt", "a")
     results.write(f"**** {network} ****\n\n\n\n")
     results.write("---- TRAINING ----\n\n\n")
 
@@ -112,7 +112,7 @@ def eval_agent(training_envs, test_envs, ep, network, defender=None):
 
     results.close()
 
-
+"""
 # CYBER BATTLE CHAIN
 
 #  WITH NO DEFENDER
@@ -185,8 +185,8 @@ ep = w.EnvironmentBounds.of_identifiers(
 
 eval_agent(training_envs, test_env, ep, "Chain with PPO defender", defender=PPODefender(ep=ep, gamma=0.15, env=training_envs[0]))
 
-
 """
+
 
 # ACTIVE DIRECTORY
 
@@ -272,7 +272,7 @@ test_env = gym.make(f'ActiveDirectory-v{ngyms}')
 test_env.seed(1)
 
 eval_agent(training_envs, test_env, ep, "Active directory with PPO defender", defender=PPODefender(ep=ep, gamma=0.15, env=training_envs[-1]))
-
+"""
 
 # RANDOM NETWORKS
 seeds = [2, 3, 4, 7, 8]

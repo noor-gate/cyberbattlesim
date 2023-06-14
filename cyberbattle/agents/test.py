@@ -18,8 +18,8 @@ from cyberbattle._env import cyberbattle_env
 from typing import Optional
 import progressbar
 
-TEST_EPISODE_COUNT = 500
-ITERATION_COUNT = 300
+TEST_EPISODE_COUNT = 1
+ITERATION_COUNT = 100
 
 
 def run(learner: Learner,
@@ -32,7 +32,7 @@ def run(learner: Learner,
     elif isinstance(learner, PPOLearnerBetter):
         return test_policy_curiosity(env, ep, learner, defender, title, render=False)
     elif isinstance(learner, RandomPolicy):
-        return train_epsilon_greedy(env, ep, learner, title, epsilon=1, render=False)
+        return train_epsilon_greedy(env, ep, learner, defender, title, epsilon=1, render=False)
     elif isinstance(learner, ActorCriticPolicy):
         return gibbs_softmax_search(
             env,

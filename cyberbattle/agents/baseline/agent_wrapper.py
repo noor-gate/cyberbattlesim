@@ -233,8 +233,11 @@ class Feature_reimaged_node(Feature):
 
     def get(self, a: StateAugmentation, node):
         nodes = a.observation['_nodelist']
+        
         bitmask = []
-        for _, nodevalue in nodes.items():
+        i = 0
+        for node_id, nodevalue in nodes.items():
+            i += 1
             node_data: NodeInfo = nodevalue['data']
             if node_data.last_reimaging:
                 bitmask.append(1)
@@ -244,6 +247,13 @@ class Feature_reimaged_node(Feature):
                 bitmask.append(1)
             else:
                 bitmask.append(0)
+        print(i, node)
+        while i < node:
+            i += 1
+            bitmask.append(0)
+            bitmask.append(0)
+            #Feature_actions_tried_at_node().get(a, node_id)
+        print(i, node)
         return bitmask
 
 

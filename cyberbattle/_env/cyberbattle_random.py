@@ -10,6 +10,6 @@ from . import cyberbattle_env
 class CyberBattleRandom(cyberbattle_env.CyberBattleEnv):
     """A sample CyberBattle environment"""
 
-    def __init__(self, seed=None):
-        super().__init__(initial_environment=generate_network.new_environment(seed, n_servers_per_protocol=15),
-                         maximum_discoverable_credentials_per_action=22)
+    def __init__(self, seed=None, **kwargs):
+        super().__init__(initial_environment=generate_network.new_environment(seed, n_servers_per_protocol=10),
+                         maximum_discoverable_credentials_per_action=22, **kwargs)

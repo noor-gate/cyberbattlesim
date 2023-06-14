@@ -290,7 +290,7 @@ def new_environment(seed, n_servers_per_protocol: int):
     were arbirarily picked. We recommend exploring different values for those parameters.
     """
     traffic = generate_random_traffic_network(seed=seed,
-                                              n_clients=30,
+                                              n_clients=20,
                                               n_servers={
                                                   "SMB": n_servers_per_protocol,
                                                   "HTTP": n_servers_per_protocol,

@@ -1196,6 +1196,7 @@ class CyberBattleEnv(gym.Env):
         return self.__environment.network.nodes[node_id]['data']
     
     def get_nodeid_from_index(self, i):
+        #print(list(self.__environment.network.nodes), i)
         return list(self.__environment.network.nodes)[i]
 
     def get_directly_exploited_nodes(self) -> float:

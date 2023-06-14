@@ -18,6 +18,7 @@ from enum import Enum
 from typing import Iterator, List, NamedTuple, Optional, Set, Tuple, Dict, TypedDict, cast
 from IPython.display import display
 import pandas as pd
+import random
 
 from cyberbattle.simulation.model import FirewallRule, MachineStatus, PrivilegeLevel, PropertyName, VulnerabilityID, VulnerabilityType
 from . import model
@@ -678,7 +679,7 @@ class DefenderAgentActions:
         node_info = self._environment.get_node(node_id)
         if len(node_info.vulnerabilities) > 0 and not self.fixing:
             node_info.vulnerabilities.popitem()
-            self.node_vuln_fixing_progress = self.REIMAGING_DURATION
+            self.node_vuln_fixing_progress = random.randint(self.REIMAGING_DURATION - 5, self.REIMAGING_DURATION + 15)
             self.fixing = True
             # print("vuln fixing")
         # else:

@@ -24,7 +24,7 @@ device = torch.device('cpu')
     device = torch.device('cuda:0')
     torch.cuda.empty_cache()"""
 
-TRAIN_EPISODE_COUNT = 500
+TRAIN_EPISODE_COUNT = 100
 ITERATION_COUNT = 300
 
 
@@ -38,12 +38,13 @@ def run(learner: Learner,
     elif isinstance(learner, PPOLearner):
         return train_policy(env, ep, learner, defender, title, render=False)
     elif isinstance(learner, RandomPolicy):
-        return train_epsilon_greedy(env, ep, learner, title, epsilon=1, render=False)
+        return train_epsilon_greedy(env, ep, learner, defender, title, epsilon=1, render=False)
     elif isinstance(learner, ActorCriticPolicy):
         return gibbs_softmax_search(
             env,
             ep,
             agent=learner,
+            defender=defender,
             title="Actor-Critic five",
             episode_count=TRAIN_EPISODE_COUNT,
             iteration_count=ITERATION_COUNT,
@@ -52,52 +53,7 @@ def run(learner: Learner,
             verbosity=Verbosity.Quiet,
         )
     else:
-        return train_epsilon_greedy(env, ep, learner, title, epsilon=0.9, render=False)
-
-
-def train_random(gym_env: cyberbattle_env.CyberBattleEnv,):
-    all_episodes_rewards = []
-    all_episodes_availability = []
-    all_episodes_direct_exploit = []
-
-    for i_episode in range(TRAIN_EPISODE_COUNT):
-
-        all_rewards = []
-        all_availability = []
-        observation = gym_env.reset()
-
-        total_reward = 0
-
-        for t in range(ITERATION_COUNT):
-            action = gym_env.sample_valid_action()
-
-            observation, reward, done, info = gym_env.step(action)
-
-            total_reward += reward
-            all_rewards.append(total_reward)
-            all_availability.append(info['network_availability'])
-
-            if reward > 0:
-                print('####### rewarded action: {action}')
-                print(f'total_reward={total_reward} reward={reward}')
-
-            if done:
-                print("Episode finished after {} timesteps".format(t + 1))
-                break
-            
-        all_episodes_rewards.append(all_rewards)
-        all_episodes_availability.append(all_availability)
-        all_episodes_direct_exploit.append(gym_env.get_directly_exploited_nodes())
-
-    gym_env.close()
-    return TrainedLearner(
-        all_episodes_rewards=all_episodes_rewards,
-        all_episodes_availability=all_episodes_availability,
-        all_episodes_direct_exploit=all_episodes_direct_exploit,
-        learner=RandomPolicy(),
-        trained_on=gym_env.name,
-        title="random"
-    )
+        return train_epsilon_greedy(env, ep, learner, defender, title, epsilon=0.9, render=False)
 
 
 def train_policy(
@@ -167,7 +123,7 @@ def train_policy(
             defender_reward = 0
             if defender:
                 defender_actuator.on_attacker_step_taken()
-                defender_reward = defender.step(wrapped_env, observation, defender_actuator)
+                defender_reward = defender.step(wrapped_env, defender_actuator)
 
             # attacker action
             gym_action, action_metadata = learner.select_action(wrapped_env, observation)
@@ -353,7 +309,7 @@ def train_policy_curiosity(
             defender_reward = 0
             if defender:
                 defender_actuator.on_attacker_step_taken()
-                defender_reward = defender.step(wrapped_env, observation, defender_actuator)
+                defender_reward = defender.step(wrapped_env, defender_actuator)
 
             # attacker action
             gym_action, action_metadata = learner.select_action(wrapped_env, observation)
@@ -476,6 +432,7 @@ def train_epsilon_greedy(
     cyberbattle_gym_env: cyberbattle_env.CyberBattleEnv,
     environment_properties: EnvironmentBounds,
     learner: Learner,
+    defender: Optional[PPODefender],
     title: str,
     epsilon,
     epsilon_minimum=0.0,
@@ -551,6 +508,8 @@ def train_epsilon_greedy(
 
     wrapped_env = AgentWrapper(cyberbattle_gym_env,
                                ActionTrackingStateAugmentation(environment_properties, cyberbattle_gym_env.reset()))
+    defender_actuator = DefenderAgentActions(cyberbattle_gym_env.environment)
+   
     steps_done = 0
     plot_title = f"{title} (epochs={TRAIN_EPISODE_COUNT}, ϵ={initial_epsilon}, ϵ_min={epsilon_minimum}," \
         + (f"ϵ_multdecay={epsilon_multdecay}," if epsilon_multdecay else '') \
@@ -606,6 +565,12 @@ def train_epsilon_greedy(
 
             steps_done += 1
 
+            # defender action
+            defender_reward = 0
+            if defender:
+                defender_actuator.on_attacker_step_taken()
+                defender_reward = defender.step(wrapped_env, defender_actuator)
+
             x = np.random.rand()
             if x <= epsilon:
                 action_style, gym_action, action_metadata = learner.explore(wrapped_env)
@@ -619,6 +584,8 @@ def train_epsilon_greedy(
             logging.debug(f"gym_action={gym_action}, action_metadata={action_metadata}")
             observation, reward, done, info = wrapped_env.step(gym_action)
 
+            attacker_reward = reward - defender_reward
+            
             action_type = 'exploit' if action_style == 'exploit' else 'explore'
             outcome = 'reward' if reward > 0 else 'noreward'
             if 'local_vulnerability' in gym_action:
@@ -628,8 +595,13 @@ def train_epsilon_greedy(
             else:
                 stats[action_type][outcome]['connect'] += 1
 
-            learner.on_step(wrapped_env, observation, reward, done, info, action_metadata)
+            learner.on_step(wrapped_env, observation, attacker_reward, done, info, action_metadata)
             assert np.shape(reward) == ()
+
+            # defender reward is negative of attacker
+            if defender:
+                defender.buffer.rewards.append(defender_reward - reward)
+                defender.buffer.is_terminals.append(done)
 
             all_rewards.append(reward)
             all_availability.append(info['network_availability'])
@@ -706,6 +678,7 @@ def gibbs_softmax_search(
     cyberbattle_gym_env: cyberbattle_env.CyberBattleEnv,
     environment_properties: EnvironmentBounds,
     agent: ActorCriticPolicy,
+    defender: Optional[PPODefender],
     title: str,
     episode_count: int,
     iteration_count: int,
@@ -727,6 +700,9 @@ def gibbs_softmax_search(
 
     wrapped_env = AgentWrapper(cyberbattle_gym_env,
                                ActionTrackingStateAugmentation(environment_properties, cyberbattle_gym_env.reset()))
+    defender_actuator = DefenderAgentActions(cyberbattle_gym_env.environment)
+
+    
     steps_done = 0
     plot_title = f"{title} (epochs={episode_count}"  \
         + agent.parameters_as_string()
@@ -772,11 +748,18 @@ def gibbs_softmax_search(
 
             steps_done += 1
 
+            # defender action
+            defender_reward = 0
+            if defender:
+                defender_actuator.on_attacker_step_taken()
+                defender_reward = defender.step(wrapped_env, defender_actuator)
+
             gym_action, action_metadata = agent.get_action(wrapped_env, observation, exploit)
 
             # Take the step
             logging.debug(f"gym_action={gym_action}, action_metadata={action_metadata}")
             observation, reward, done, info = wrapped_env.step(gym_action)
+            attacker_reward = reward - defender_reward
 
             outcome = 'reward' if reward > 0 else 'noreward'
             """if 'local_vulnerability' in gym_action:
@@ -786,8 +769,12 @@ def gibbs_softmax_search(
             else:
                 stats[outcome]['connect'] += 1"""
 
-            agent.on_step(wrapped_env, reward, done, action_metadata)
+            agent.on_step(wrapped_env, attacker_reward, done, action_metadata)
             assert np.shape(reward) == ()
+
+            if defender:
+                defender.buffer.rewards.append(defender_reward - reward)
+                defender.buffer.is_terminals.append(done)
 
             all_rewards.append(reward)
             all_availability.append(info['network_availability'])

@@ -15,6 +15,7 @@ from cyberbattle.agents.baseline.agent_wrapper import ActionTrackingStateAugment
 import cyberbattle.agents.baseline.agent_wrapper as w
 from cyberbattle._env.defender import DefenderAgent
 from cyberbattle.agents.baseline.learner import Breakdown, PolicyStats
+from cyberbattle.agents.defenders.trainable_defender import TrainableDefender
 from cyberbattle.simulation import model
 from cyberbattle.simulation.actions import DefenderAgentActions
 from cyberbattle.simulation.model import Environment, NodeID
@@ -29,13 +30,14 @@ TRAIN_EPISODE_COUNT = 10
 ITERATION_COUNT = 500
 
 
-class PPODefender():
+class PPODefender(TrainableDefender):
     def __init__(self,
                  ep: EnvironmentBounds, gamma: float, env: cyberbattle_env.CyberBattleEnv):
         self.ep = ep
         self.state_space = Feature_reimaged_node(ep)
-        self.action_space = 2 * len(list(env.environment.network.nodes))
-        self.state_space_size = 2 * len(list(env.environment.network.nodes))
+        self.node_count = len(list(env.environment.network.nodes))
+        self.action_space = 2 * ep.maximum_node_count
+        self.state_space_size = 2 * ep.maximum_node_count
         # print("state space", self.state_space)
         self.policy_old = ActorCritic(self.state_space_size, self.action_space)
         self.policy = ActorCritic(self.state_space_size, self.action_space)
@@ -50,10 +52,13 @@ class PPODefender():
             {'params': self.policy.critic.parameters(), 'lr': lr_critic}
         ])
 
-    def step(self, wrapped_env: AgentWrapper, observation, actions: DefenderAgentActions):
-        
+    def set_node_count(self, env):
+        self.node_count = len(list(env.environment.network.nodes))
+
+    def step(self, wrapped_env: AgentWrapper, actions: DefenderAgentActions):
+        print(self.action_space, self.state_space_size, self.node_count)
         with torch.no_grad():
-            state = self.state_space.get(wrapped_env.state, node=None)
+            state = self.state_space.get(wrapped_env.state, node=self.ep.maximum_node_count)
             state = np.array(state, dtype=np.float32)
             state = torch.tensor(state).to(device)
             abstract_action, action_logprob, state_val = self.policy_old.act(state)
@@ -64,7 +69,7 @@ class PPODefender():
         self.buffer.logprobs.append(action_logprob)
         self.buffer.state_values.append(state_val)
 
-        space = 0.5 * self.action_space
+        space = 0.5 * self.node_count
 
         #print(abstract_action)
         if abstract_action < space:
@@ -73,9 +78,9 @@ class PPODefender():
             if node_info.status == model.MachineStatus.Running:
                 logging.info(f"Defender detected malware, reimaging node {abstract_action}")
                 actions.fix_vulnerability(node_id)
-                #  print("reimging", abstract_action)
+                print("reimging", abstract_action)
                 return node_info.value
-        elif abstract_action >= space and abstract_action < self.action_space:
+        elif abstract_action >= space and abstract_action < self.node_count:
             abstract_action = int(abstract_action % space)
             node_id = wrapped_env.env.get_nodeid_from_index(abstract_action)
             node_info = wrapped_env.env.get_node(node_id)
@@ -83,8 +88,8 @@ class PPODefender():
                 if node_info.reimagable:
                     logging.info(f"Defender detected malware, reimaging node {abstract_action}")
                     actions.reimage_node(node_id)
-                    # print("node reimage")
-                    return node_info.value
+                    print("node reimage")
+                return node_info.value
         return 0
 
     def update(self):

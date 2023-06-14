@@ -18,7 +18,7 @@ TRAINING_CHAIN_SIZE = 20
 TEST_CHAIN_SIZE = 16
 REWARD_GOAL = 2180
 OWN_ATLEAST_PERCENT = 1.0
-ngyms = 7
+ngyms = 3
 
 results = open("results.txt", "w")
 results.close()
@@ -36,7 +36,7 @@ def eval_agent(training_envs, test_envs, ep, network, defender=None):
 
     trained_agents = []
 
-    results = open("results_chain_train.txt", "a")
+    results = open("results_random_train.txt", "a")
     results.write(f"**** {network} ****\n\n\n\n")
     results.write("---- TRAINING ----\n\n\n")
 
@@ -111,7 +111,7 @@ def eval_agent(training_envs, test_envs, ep, network, defender=None):
     # p.plot_episodes_length(f"{network} test episode lengths", all_runs)"""
 
     results.close()
-
+"""
 
 # CYBER BATTLE CHAIN
 
@@ -186,7 +186,7 @@ ep = w.EnvironmentBounds.of_identifiers(
 eval_agent(training_envs, test_env, ep, "Chain with PPO defender", defender=PPODefender(ep=ep, gamma=0.15, env=training_envs[0]))
 
 
-"""
+
 
 # ACTIVE DIRECTORY
 
@@ -272,7 +272,7 @@ test_env = gym.make(f'ActiveDirectory-v{ngyms}')
 test_env.seed(1)
 
 eval_agent(training_envs, test_env, ep, "Active directory with PPO defender", defender=PPODefender(ep=ep, gamma=0.15, env=training_envs[-1]))
-
+"""
 
 # RANDOM NETWORKS
 seeds = [2, 3, 4, 7, 8]
@@ -330,7 +330,7 @@ test_envs = [gym.make("CyberBattleRandom-v0", seed=i) for i in seeds]
 eval_agent(training_envs, test_envs, ep, "Random with PPO defender", defender=PPODefender(ep=ep, gamma=0.15, env=training_envs[0]))
 
 
-
+"""
 # COMPARING DEFENDERS
 
 training_envs = [gym.make('CyberBattleChain-v0',
