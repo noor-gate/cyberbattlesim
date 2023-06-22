@@ -62,8 +62,6 @@ class ExternalRandomEvents(DefenderAgent):
     def step(self, environment: Environment, actions: DefenderAgentActions, t: int):
         self.patch_vulnerabilities_at_random(environment)
         self.stop_service_at_random(environment, actions)
-        self.plant_vulnerabilities_at_random(environment)
-        self.firewall_change_remove(environment)
         self.firewall_change_add(environment)
 
     def patch_vulnerabilities_at_random(self, environment: Environment, probability: float = 0.1) -> None:

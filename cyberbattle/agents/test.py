@@ -5,7 +5,7 @@ import torch
 from cyberbattle.agents import utils
 from cyberbattle.agents.agent_ppo import PPOLearner
 from cyberbattle.agents.compare.a2c.agent_actor_critic import ActorCriticPolicy
-from cyberbattle.agents.ppo_curiosity.agent_ppo_curiosity import PPOLearnerBetter
+from cyberbattle.agents.ppo_curiosity.agent_ppo_curiosity import PPOLearnerCuriosity
 from cyberbattle.agents.baseline.learner import Breakdown, Learner, Outcomes, PolicyStats, RandomPolicy, Stats, TrainedLearner
 from cyberbattle.agents.defenders.ppo_defender import PPODefender
 from cyberbattle.agents.train import train_epsilon_greedy
@@ -29,7 +29,7 @@ def run(learner: Learner,
         defender: Optional[PPODefender]) -> TrainedLearner:
     if isinstance(learner, PPOLearner):
         return test_policy(env, ep, learner, defender, title, render=False)
-    elif isinstance(learner, PPOLearnerBetter):
+    elif isinstance(learner, PPOLearnerCuriosity):
         return test_policy_curiosity(env, ep, learner, defender, title, render=False)
     elif isinstance(learner, RandomPolicy):
         return train_epsilon_greedy(env, ep, learner, defender, title, epsilon=1, render=False)
@@ -38,7 +38,8 @@ def run(learner: Learner,
             env,
             ep,
             agent=learner,
-            title="Actor-Critic five",
+            defender=defender,
+            title="A2C",
             episode_count=TEST_EPISODE_COUNT,
             iteration_count=ITERATION_COUNT,
             exploit=False,
@@ -46,7 +47,7 @@ def run(learner: Learner,
             verbosity=Verbosity.Quiet,
         )
     else:
-        return test_epsilon_greedy(env, ep, learner, title, render=False)
+        return test_epsilon_greedy(env, ep, learner, defender, title, render=False)
 
 
 def test_random(gym_env: cyberbattle_env.CyberBattleEnv, title):
@@ -158,16 +159,18 @@ def test_policy(
         for t in bar(range(1, 1 + ITERATION_COUNT)):
 
             # defender action
+            defender_reward = 0
             if defender:
                 defender_actuator.on_attacker_step_taken()
+                defender_reward = defender.step(wrapped_env, defender_actuator)
 
             # attacker action
             gym_action, action_metadata = learner.select_action(wrapped_env, observation)
 
             if not gym_action:
                 gym_action = wrapped_env.env.sample_valid_action(kinds=[0, 1, 2])
-                
-            observation, reward, done, info = wrapped_env.step(gym_action)     
+
+            observation, reward, done, info = wrapped_env.step(gym_action)
 
             outcome = 'reward' if reward > 0 else 'noreward'
             if 'local_vulnerability' in gym_action:
@@ -179,6 +182,7 @@ def test_policy(
 
             # if reward > 0:
                 # print(gym_action)
+            attacker_reward = reward - defender_reward
 
             time_step += 1
             current_ep_reward += reward
@@ -250,7 +254,7 @@ def test_policy(
 def test_policy_curiosity(
         cyberbattle_gym_env: cyberbattle_env.CyberBattleEnv,
         environment_properties: EnvironmentBounds,
-        learner: PPOLearnerBetter,
+        learner: PPOLearnerCuriosity,
         defender: Optional[PPODefender],
         title: str,
         verbosity: Verbosity = Verbosity.Quiet,
@@ -311,8 +315,10 @@ def test_policy_curiosity(
         for t in bar(range(1, 1 + ITERATION_COUNT)):
 
             # defender action
+            defender_reward = 0
             if defender:
                 defender_actuator.on_attacker_step_taken()
+                defender_reward = defender.step(wrapped_env, defender_actuator)
 
             # attacker action
             gym_action, action_metadata = learner.select_action(wrapped_env, observation)
@@ -332,7 +338,7 @@ def test_policy_curiosity(
 
             # if reward > 0:
                 # print(gym_action)
-
+            attacker_reward = reward - defender_reward
             time_step += 1
             current_ep_reward += reward
             all_rewards.append(reward)
@@ -340,7 +346,6 @@ def test_policy_curiosity(
             bar.update(t, reward=current_ep_reward)
             if reward > 0:
                 bar.update(t, last_reward_at=t)
-
 
             if verbosity == Verbosity.Verbose or (verbosity == Verbosity.Normal and reward > 0):
                 sign = ['-', '+'][reward > 0]
@@ -400,13 +405,14 @@ def test_policy_curiosity(
         title=title
     )
 
+
 def test_policy_2(env: cyberbattle_env.CyberBattleEnv,
-                ep: EnvironmentBounds,
-                learner: PPOLearner,
-                title: str,
-                render=True,
-                render_last_episode_rewards_to: Optional[str] = None,
-                plot_episodes_length=True):
+                  ep: EnvironmentBounds,
+                  learner: PPOLearner,
+                  title: str,
+                  render=True,
+                  render_last_episode_rewards_to: Optional[str] = None,
+                  plot_episodes_length=True):
     wrapped_env = AgentWrapper(env,
                                ActionTrackingStateAugmentation(ep, env.reset()))
 
@@ -526,6 +532,7 @@ def test_epsilon_greedy(
     cyberbattle_gym_env: cyberbattle_env.CyberBattleEnv,
     environment_properties: EnvironmentBounds,
     learner: Learner,
+    defender: Optional[PPODefender],
     title: str,
     render=True,
     render_last_episode_rewards_to: Optional[str] = None,
@@ -544,6 +551,8 @@ def test_epsilon_greedy(
 
     wrapped_env = AgentWrapper(cyberbattle_gym_env,
                                ActionTrackingStateAugmentation(environment_properties, cyberbattle_gym_env.reset()))
+    defender_actuator = DefenderAgentActions(cyberbattle_gym_env.environment)
+    
     steps_done = 0
     plot_title = f"{title}(epochs={TEST_EPISODE_COUNT}," \
         + learner.parameters_as_string()
@@ -592,6 +601,12 @@ def test_epsilon_greedy(
 
             steps_done += 1
 
+            # defender action
+            defender_reward = 0
+            if defender:
+                defender_actuator.on_attacker_step_taken()
+                defender_reward = defender.step(wrapped_env, defender_actuator)
+
             action_style, gym_action, action_metadata = learner.exploit(wrapped_env, observation)
             if not gym_action:
                 break
@@ -611,6 +626,7 @@ def test_epsilon_greedy(
 
             assert np.shape(reward) == ()
 
+            attacker_reward = reward - defender_reward
             all_rewards.append(reward)
             all_availability.append(info['network_availability'])
             total_reward += reward
@@ -683,6 +699,7 @@ def gibbs_softmax_search(
     cyberbattle_gym_env: cyberbattle_env.CyberBattleEnv,
     environment_properties: EnvironmentBounds,
     agent: ActorCriticPolicy,
+    defender: Optional[PPODefender],
     title: str,
     episode_count: int,
     iteration_count: int,
@@ -704,9 +721,10 @@ def gibbs_softmax_search(
 
     wrapped_env = AgentWrapper(cyberbattle_gym_env,
                                ActionTrackingStateAugmentation(environment_properties, cyberbattle_gym_env.reset()))
+    defender_actuator = DefenderAgentActions(cyberbattle_gym_env.environment)
+    
     steps_done = 0
-    plot_title = f"{title} (epochs={episode_count}"  \
-        + agent.parameters_as_string()
+    plot_title = f"{title}"
     plottraining = PlotTraining(title=plot_title, render_each_episode=render)
 
     render_file_index = 1
@@ -720,7 +738,7 @@ def gibbs_softmax_search(
         total_reward = 0.0
         all_rewards = []
         all_availability = []
-        #agent.new_episode()
+        # agent.new_episode()
 
         """stats = Stats(Outcomes(reward=Breakdown(local=0, remote=0, connect=0),
                                noreward=Breakdown(local=0, remote=0, connect=0))
@@ -749,6 +767,12 @@ def gibbs_softmax_search(
 
             steps_done += 1
 
+            defender_reward = 0
+            if defender:
+                defender_actuator.on_attacker_step_taken()
+                defender_reward = defender.step(wrapped_env, defender_actuator)
+
+
             gym_action, action_metadata = agent.get_action(wrapped_env, observation, exploit)
 
             # Take the step
@@ -763,9 +787,10 @@ def gibbs_softmax_search(
             else:
                 stats[outcome]['connect'] += 1"""
 
-            #agent.on_step(wrapped_env, reward, done, action_metadata)
+            # agent.on_step(wrapped_env, reward, done, action_metadata)
             assert np.shape(reward) == ()
 
+            attacker_reward = reward - defender_reward
             all_rewards.append(reward)
             all_availability.append(info['network_availability'])
             total_reward += reward

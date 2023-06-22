@@ -6,7 +6,7 @@ from cyberbattle._env.defender import DefenderAgent
 from cyberbattle.agents import utils
 from cyberbattle.agents.agent_ppo import PPOLearner
 from cyberbattle.agents.compare.a2c.agent_actor_critic import ActorCriticPolicy
-from cyberbattle.agents.ppo_curiosity.agent_ppo_curiosity import PPOLearnerBetter
+from cyberbattle.agents.ppo_curiosity.agent_ppo_curiosity import PPOLearnerCuriosity
 from cyberbattle.agents.baseline.learner import Breakdown, Learner, Outcomes, PolicyStats, RandomPolicy, Stats, TrainedLearner
 from cyberbattle.agents.defenders.ppo_defender import PPODefender
 from cyberbattle.simulation.actions import DefenderAgentActions
@@ -24,8 +24,8 @@ device = torch.device('cpu')
     device = torch.device('cuda:0')
     torch.cuda.empty_cache()"""
 
-TRAIN_EPISODE_COUNT = 100
-ITERATION_COUNT = 300
+TRAIN_EPISODE_COUNT = 1
+ITERATION_COUNT = 100
 
 
 def run(learner: Learner,
@@ -33,7 +33,7 @@ def run(learner: Learner,
         ep: EnvironmentBounds,
         title: str,
         defender: Optional[PPODefender] = None) -> TrainedLearner:
-    if isinstance(learner, PPOLearnerBetter):
+    if isinstance(learner, PPOLearnerCuriosity):
         return train_policy_curiosity(env, ep, learner, defender, title, render=False)
     elif isinstance(learner, PPOLearner):
         return train_policy(env, ep, learner, defender, title, render=False)
@@ -45,7 +45,7 @@ def run(learner: Learner,
             ep,
             agent=learner,
             defender=defender,
-            title="Actor-Critic five",
+            title="A2C",
             episode_count=TRAIN_EPISODE_COUNT,
             iteration_count=ITERATION_COUNT,
             exploit=False,
@@ -149,7 +149,8 @@ def train_policy(
             #    print(f"defender_action={defender_action} attacker_action={gym_action} reward={reward}")
 
             # attacker reward
-            learner.buffer.rewards.append(reward - defender_reward)
+            attacker_reward = reward - defender_reward
+            learner.buffer.rewards.append(attacker_reward)
             learner.buffer.is_terminals.append(done)
 
             # defender reward is negative of attacker
@@ -245,7 +246,7 @@ def train_policy(
 def train_policy_curiosity(
         cyberbattle_gym_env: cyberbattle_env.CyberBattleEnv,
         environment_properties: EnvironmentBounds,
-        learner: PPOLearnerBetter,
+        learner: PPOLearnerCuriosity,
         defender: Optional[PPODefender],
         title: str,
         verbosity: Verbosity = Verbosity.Quiet,
@@ -335,7 +336,8 @@ def train_policy_curiosity(
             #    print(f"defender_action={defender_action} attacker_action={gym_action} reward={reward}")
 
             # attacker reward
-            learner.buffer.rewards.append(reward - defender_reward)
+            attacker_reward = reward - defender_reward
+            learner.buffer.rewards.append(attacker_reward)
             learner.buffer.is_terminals.append(done)
 
             # defender reward is negative of attacker
@@ -509,7 +511,7 @@ def train_epsilon_greedy(
     wrapped_env = AgentWrapper(cyberbattle_gym_env,
                                ActionTrackingStateAugmentation(environment_properties, cyberbattle_gym_env.reset()))
     defender_actuator = DefenderAgentActions(cyberbattle_gym_env.environment)
-   
+
     steps_done = 0
     plot_title = f"{title} (epochs={TRAIN_EPISODE_COUNT}, ϵ={initial_epsilon}, ϵ_min={epsilon_minimum}," \
         + (f"ϵ_multdecay={epsilon_multdecay}," if epsilon_multdecay else '') \
@@ -585,7 +587,7 @@ def train_epsilon_greedy(
             observation, reward, done, info = wrapped_env.step(gym_action)
 
             attacker_reward = reward - defender_reward
-            
+
             action_type = 'exploit' if action_style == 'exploit' else 'explore'
             outcome = 'reward' if reward > 0 else 'noreward'
             if 'local_vulnerability' in gym_action:
@@ -702,10 +704,8 @@ def gibbs_softmax_search(
                                ActionTrackingStateAugmentation(environment_properties, cyberbattle_gym_env.reset()))
     defender_actuator = DefenderAgentActions(cyberbattle_gym_env.environment)
 
-    
     steps_done = 0
-    plot_title = f"{title} (epochs={episode_count}"  \
-        + agent.parameters_as_string()
+    plot_title = f"{title}"
     plottraining = PlotTraining(title=plot_title, render_each_episode=render)
 
     render_file_index = 1
@@ -816,7 +816,7 @@ def gibbs_softmax_search(
         else:
             print(f"  Episode {i_episode} stopped at t={iteration_count} {loss_string}")
 
-        #print_stats(stats)
+        # print_stats(stats)
 
         all_episodes_rewards.append(all_rewards)
         all_episodes_availability.append(all_availability)

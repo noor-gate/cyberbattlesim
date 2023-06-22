@@ -120,8 +120,8 @@ class PPOLearner(Learner):
         self.buffer = RolloutBuffer()
         self.gamma = gamma
         self.K_epochs = 40
-        self.eps_clip = 0.2
-        lr_actor = 0.1      # learning rate for actor network
+        self.eps_clip = 0.15
+        lr_actor = 0.002      # learning rate for actor network
         lr_critic = 0.001
         self.optimizer = torch.optim.Adam([
             {'params': self.policy.actor.parameters(), 'lr': lr_actor},

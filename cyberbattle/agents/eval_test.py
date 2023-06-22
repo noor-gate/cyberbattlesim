@@ -4,7 +4,7 @@ import cyberbattle._env.cyberbattle_env as cyberbattle_env
 from cyberbattle._env.defender import ExternalRandomEvents, ScanAndReimageCompromisedMachines
 from cyberbattle.agents import test, train
 from cyberbattle.agents.compare.a2c.agent_actor_critic import ActorCriticPolicy
-from cyberbattle.agents.ppo_curiosity.agent_ppo_curiosity import PPOLearnerBetter
+from cyberbattle.agents.ppo_curiosity.agent_ppo_curiosity import PPOLearnerCuriosity
 import cyberbattle.agents.baseline.learner as learner
 import cyberbattle.agents.baseline.agent_wrapper as w
 import cyberbattle.agents.baseline.agent_dql as dqla
@@ -18,7 +18,7 @@ TRAINING_CHAIN_SIZE = 20
 TEST_CHAIN_SIZE = 16
 REWARD_GOAL = 2180
 OWN_ATLEAST_PERCENT = 1.0
-ngyms = 7
+ngyms = 8
 
 results = open("results.txt", "w")
 results.close()
@@ -26,12 +26,12 @@ results.close()
 
 def eval_agent(training_envs, test_envs, ep, network, defender=None):
     agents = [(ActorCriticPolicy(ep, gamma=0.01, λ=0.1, learning_rate=0.1, hash_size=98689), "A2C"),
-              (SarsaLambdaPolicy(ep, gamma=0.015), "SARSA"),
+              #(SarsaLambdaPolicy(ep, gamma=0.015), "SARSA"),
               (learner.RandomPolicy(), "Random"),
-              (tql.QTabularLearner(ep=ep, gamma=0.015, learning_rate=0.01, exploit_percentile=100), "Tabular Q-Learning"),
+              #(tql.QTabularLearner(ep=ep, gamma=0.015, learning_rate=0.01, exploit_percentile=100), "Tabular Q-Learning"),
               (dqla.DeepQLearnerPolicy(ep=ep, gamma=0.015, replay_memory_size=10000, target_update=10, batch_size=512, learning_rate=0.01), "Deep Q-Learning"),
               (ppo.PPOLearner(ep=ep, gamma=0.15), "PPO"),
-              (PPOLearnerBetter(ep=ep, gamma=0.15), "PPO Curiosity"),
+              (PPOLearnerCuriosity(ep=ep, gamma=0.15), "PPO Curiosity"),
               ]
 
     trained_agents = []
@@ -41,7 +41,7 @@ def eval_agent(training_envs, test_envs, ep, network, defender=None):
     results.write("---- TRAINING ----\n\n\n")
 
     all_runs = []
-    
+    env_rewards = {0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: []}
     for (agent, title) in agents:
         # Training loop for each agent
         rewards, lengths, direct_exploit_avg = [], [], []
@@ -51,6 +51,7 @@ def eval_agent(training_envs, test_envs, ep, network, defender=None):
             if defender:
                 defender.set_node_count(env)
             run = train.run(trained_agent, env, ep, f"{title}", defender)
+            env_rewards[i].append([sum(r) for r in run['all_episodes_rewards']])
             print(f"*** {network} {i} ***")
             rewards.append(p.mean_reward(run))
             lengths.append(p.average_episode_length(run))
@@ -65,33 +66,8 @@ def eval_agent(training_envs, test_envs, ep, network, defender=None):
         results.write(f"Average training episode length: {round(np.average(lengths), 2)}\n")
         results.write(f"Average training direct exploit: {round(np.average(direct_exploit_avg), 2)}\n\n")
 
-    p.plot_averaged_cummulative_rewards(f"{network} cumulative training rewards", all_runs)
-    """
-    # p.plot_episodes_length(f"{network} training episode lengths", all_runs)
-    env_rewards = {0: [], 1: [], 2: [], 3: [], 4: []}
-    all_runs = []
-    results.write("\n\n\n---- TESTING ----\n\n\n")
-    all_rewards = []
-    for (agent, title) in trained_agents:
-        rewards, lengths, direct_exploit_avg = [], [], []
-        trained_agent = agent
-        run = None
-        for (i, env) in enumerate(test_envs):
-            run = test.run(trained_agent, env, ep, f"{title}", defender)
-
-            env_rewards[i].append([sum(r) for r in run['all_episodes_rewards']])
-            rewards.append(p.mean_reward(run))
-            lengths.append(p.average_episode_length(run))
-            direct_exploit_avg.append(p.episodes_direct_exploit_averaged(run))
-            
-        all_runs.append(run)
-        all_rewards.append(rewards)
-        results.write(f"Average test reward: {round(np.average(rewards), 2)}\n")
-        results.write(f"Average test episode length: {round(np.average(lengths), 2)}\n")
-        results.write(f"Average test direct exploit: {round(np.average(direct_exploit_avg), 2)}\n\n")
-
     print(env_rewards)
-    #print(np.shape(env_rewards[0]))
+    # print(np.shape(env_rewards[0]))
     for i in env_rewards.keys():
         best_agents = []
         for j in range(len(env_rewards[i][0])):
@@ -106,8 +82,48 @@ def eval_agent(training_envs, test_envs, ep, network, defender=None):
         for k in range(len(env_rewards[i])):
             results.write(f"{k} : {best_agents.count(k)}/{len(env_rewards[i][0])}\n")
 
+    p.plot_averaged_cummulative_rewards(f"{network} cumulative training rewards", all_runs)
+    
+    # p.plot_episodes_length(f"{network} training episode lengths", all_runs)
+    env_rewards = {0: [], 1: [], 2: []}
+    all_runs = {0: [], 1: [], 2: []}
+    results.write("\n\n\n---- TESTING ----\n\n\n")
 
-    p.plot_averaged_cummulative_rewards(f"{network} cumulative test rewards", all_runs)
+    for (agent, title) in trained_agents:
+        rewards, lengths, direct_exploit_avg = [], [], []
+        trained_agent = agent
+        run = None
+        for (i, env) in enumerate(test_envs):
+            run = test.run(trained_agent, env, ep, f"{title}", defender)
+            all_runs[i].append(run)
+            env_rewards[i].append([sum(r) for r in run['all_episodes_rewards']])
+            rewards.append(p.mean_reward(run))
+            lengths.append(p.average_episode_length(run))
+            direct_exploit_avg.append(p.episodes_direct_exploit_averaged(run))
+            
+        results.write(f"Average test reward: {round(np.average(rewards), 2)}\n")
+        results.write(f"Average test episode length: {round(np.average(lengths), 2)}\n")
+        results.write(f"Average test direct exploit: {round(np.average(direct_exploit_avg), 2)}\n\n")
+
+    for i in all_runs.keys():
+        p.plot_averaged_cummulative_rewards(f"{network} {i} cumulative test rewards", all_runs[i])
+
+    print(env_rewards)
+    for i in env_rewards.keys():
+        best_agents = []
+        for j in range(len(env_rewards[i][0])):
+            maximum_ep = 0
+            best_agent = 0
+            for k in range(len(env_rewards[i])):
+                if env_rewards[i][k][j] > maximum_ep:
+                    maximum_ep = env_rewards[i][k][j]
+                    best_agent = k
+            best_agents.append(best_agent)
+        results.write(f"Env {i}: \n")
+        for k in range(len(env_rewards[i])):
+            results.write(f"{k} : {best_agents.count(k)}/{len(env_rewards[i][0])}\n")
+
+   
     # p.plot_episodes_length(f"{network} test episode lengths", all_runs)"""
 
     results.close()
@@ -116,30 +132,31 @@ def eval_agent(training_envs, test_envs, ep, network, defender=None):
 # CYBER BATTLE CHAIN
 
 #  WITH NO DEFENDER
-
+"""
 # Creating environments
-training_envs = [gym.make("CyberBattleChain-v0", size=((4 * (i + 2)))) for i in range(ngyms)]
-test_env = gym.make("CyberBattleChain-v0", size=((4 * (ngyms + 2))))
+training_envs = [gym.make("CyberBattleChain-v0", size=((4 * (i + 1)))) for i in range(ngyms)]
+test_envs = [gym.make("CyberBattleChain-v0", size=((4 * (i + 1)))) for i in range(ngyms, ngyms + 3)]
 
 ep = w.EnvironmentBounds.of_identifiers(
-    maximum_total_credentials=22,
-    maximum_node_count=22,
+    maximum_total_credentials=30,
+    maximum_node_count=50,
     identifiers=training_envs[0].identifiers
 )
 
-eval_agent(training_envs, test_env, ep, "Chain without defender")
+eval_agent(training_envs, test_envs, ep, "Chain without defender")
 # eval_agent(training_envs, test_env, ep, "Chain without defender")
+
 
 # WITH EXTERNAL RANDOM EVENTS DEFENDER
 
 training_envs = [gym.make('CyberBattleChain-v0',
-                          size=((4 * (i + 2))),
+                          size=((4 * (i + 1))),
                           defender_constraint=cyberbattle_env.DefenderConstraint(
                               maintain_sla=0.80
                           ),
                           defender_agent=ExternalRandomEvents()) for i in range(ngyms)]
 test_env = gym.make("CyberBattleChain-v0",
-                    size=((4 * (ngyms + 2))),
+                    size=((4 * (ngyms + 1))),
                     defender_constraint=cyberbattle_env.DefenderConstraint(
                         maintain_sla=0.80
                     ),
@@ -151,7 +168,7 @@ eval_agent(training_envs, test_env, ep, "Chain with external random events defen
 # WITH SCAN AND COMPROMISE DEFENDER
 
 training_envs = [gym.make('CyberBattleChain-v0',
-                          size=((4 * (i + 2))),
+                          size=((4 * (i + 1))),
                           defender_constraint=cyberbattle_env.DefenderConstraint(
                               maintain_sla=0.80
                           ),
@@ -159,34 +176,40 @@ training_envs = [gym.make('CyberBattleChain-v0',
                               probability=0.6,
                               scan_capacity=2,
                               scan_frequency=5)) for i in range(ngyms)]
-test_env = gym.make("CyberBattleChain-v0",
-                    size=((4 * (ngyms + 2))),
-                    defender_constraint=cyberbattle_env.DefenderConstraint(
-                        maintain_sla=0.80
-                    ),
-                    defender_agent=ScanAndReimageCompromisedMachines(
+test_envs = [gym.make("CyberBattleChain-v0",
+                      size=((4 * (i + 1))),
+                      defender_constraint=cyberbattle_env.DefenderConstraint(
+                          maintain_sla=0.80
+                      ),
+                      defender_agent=ScanAndReimageCompromisedMachines(
                         probability=0.6,
                         scan_capacity=2,
-                        scan_frequency=5))
+                        scan_frequency=5)) for i in range(ngyms, ngyms + 3)]
 
-eval_agent(training_envs, test_env, ep, "Chain with scan and compromise defender")
+ep = w.EnvironmentBounds.of_identifiers(
+    maximum_total_credentials=30,
+    maximum_node_count=50,
+    identifiers=training_envs[0].identifiers
+)
+
+eval_agent(training_envs, test_envs, ep, "Chain with scan and compromise defender")
 
 
 # WITH PPO DEFENDER
 
-training_envs = [gym.make("CyberBattleChain-v0", size=((4 * (i + 2)))) for i in range(ngyms)]
-test_env = gym.make("CyberBattleChain-v0", size=((4 * (ngyms + 2))))
+training_envs = [gym.make("CyberBattleChain-v0", size=((4 * (i + 1)))) for i in range(ngyms)]
+test_envs = [gym.make("CyberBattleChain-v0", size=((4 * (i + 1)))) for i in range(ngyms, ngyms + 3)]
 
 ep = w.EnvironmentBounds.of_identifiers(
-    maximum_total_credentials=22,
-    maximum_node_count=22,
+    maximum_total_credentials=30,
+    maximum_node_count=50,
     identifiers=training_envs[0].identifiers
 )
 
-eval_agent(training_envs, test_env, ep, "Chain with PPO defender", defender=PPODefender(ep=ep, gamma=0.15, env=training_envs[0]))
+eval_agent(training_envs, test_envs, ep, "Chain with PPO defender", defender=PPODefender(ep=ep, gamma=0.15, env=training_envs[0]))
 
 
-"""
+
 
 # ACTIVE DIRECTORY
 
@@ -202,10 +225,10 @@ ep = w.EnvironmentBounds.of_identifiers(
     identifiers=training_envs[0].identifiers
 )
 
-test_env = gym.make(f'ActiveDirectory-v{ngyms}')
-test_env.seed(1)
+test_envs = [gym.make(f'ActiveDirectory-v{i}') for i in range(ngyms - 1, ngyms + 2)]
+[test_env.seed(1) for test_env in test_envs]
 
-eval_agent(training_envs, test_env, ep, "Active directory without defender")
+eval_agent(training_envs, test_envs, ep, "Active directory without defender")
 
 # WITH EXTERNAL RANDOM EVENTS DEFENDER
 
@@ -244,17 +267,18 @@ ep = w.EnvironmentBounds.of_identifiers(
     identifiers=training_envs[0].identifiers
 )
 
-test_env = gym.make(f'ActiveDirectory-v{ngyms}',
+test_envs = [gym.make(f'ActiveDirectory-v{i}',
                     defender_constraint=cyberbattle_env.DefenderConstraint(
                         maintain_sla=0.80
                     ),
                     defender_agent=ScanAndReimageCompromisedMachines(
                         probability=0.6,
                         scan_capacity=2,
-                        scan_frequency=5))
-test_env.seed(1)
+                        scan_frequency=5)) for i in range(ngyms - 1, ngyms + 2)]
 
-eval_agent(training_envs, test_env, ep, "Active directory with scan and compromise defender")
+[test_env.seed(i + 5) for i, test_env in enumerate(test_envs)]
+
+eval_agent(training_envs, test_envs, ep, "Active directory with scan and compromise defender")
 
 
 # PPO DEFENDER
@@ -268,15 +292,15 @@ ep = w.EnvironmentBounds.of_identifiers(
     identifiers=training_envs[0].identifiers
 )
 
-test_env = gym.make(f'ActiveDirectory-v{ngyms}')
-test_env.seed(1)
+test_envs = [gym.make(f'ActiveDirectory-v{i}') for i in range(ngyms - 1, ngyms + 2)]
+[test_env.seed(i + 10) for i, test_env in enumerate(test_envs)]
 
-eval_agent(training_envs, test_env, ep, "Active directory with PPO defender", defender=PPODefender(ep=ep, gamma=0.15, env=training_envs[-1]))
+eval_agent(training_envs, test_envs, ep, "Active directory with PPO defender", defender=PPODefender(ep=ep, gamma=0.15, env=training_envs[-1]))
 
 
 # RANDOM NETWORKS
-seeds = [2, 3, 4, 7, 8]
-training_envs = [gym.make("CyberBattleRandom-v0", seed=i + 11) for i in range(4)]
+seeds = [7, 3, 4]
+training_envs = [gym.make("CyberBattleRandom-v0", seed=i+15) for i in range(8)]
 test_envs = [gym.make("CyberBattleRandom-v0", seed=i) for i in seeds]
 ep = w.EnvironmentBounds.of_identifiers(
     maximum_node_count=30,
@@ -285,9 +309,11 @@ ep = w.EnvironmentBounds.of_identifiers(
 )
 
 # NO DEFENDER
-#eval_agent(training_envs, test_envs, ep, "Random without defender")
+eval_agent(training_envs, test_envs, ep, "Random without defender")
+
 
 # SCAN AND COMPROMISE DEFENDER
+seeds = [7, 3, 4]
 training_envs = [gym.make("CyberBattleRandom-v0", seed=i + 15,
                           defender_constraint=cyberbattle_env.DefenderConstraint(
                               maintain_sla=0.80
@@ -304,9 +330,13 @@ test_envs = [gym.make("CyberBattleRandom-v0", seed=i,
                           probability=0.6,
                           scan_capacity=2,
                           scan_frequency=5)) for i in seeds]
+ep = w.EnvironmentBounds.of_identifiers(
+    maximum_node_count=30,
+    maximum_total_credentials=50,
+    identifiers=training_envs[0].identifiers
+)
 
 eval_agent(training_envs, test_envs, ep, "Random with scan and compromise defender")
-
 # EXTERNAL RANDOM EVENTS DEFENDER
 
 training_envs = [gym.make("CyberBattleRandom-v0", seed=i + 15,
@@ -321,15 +351,22 @@ test_envs = [gym.make("CyberBattleRandom-v0", seed=i,
                       defender_agent=ExternalRandomEvents()) for i in seeds]
 
 eval_agent(training_envs, test_envs, ep, "Random with external random events defender")
-
+"""
 # PPO DEFENDER
 
+
+seeds = [7, 3, 4]
 training_envs = [gym.make("CyberBattleRandom-v0", seed=i + 15) for i in range(8)]
 test_envs = [gym.make("CyberBattleRandom-v0", seed=i) for i in seeds]
+ep = w.EnvironmentBounds.of_identifiers(
+    maximum_node_count=30,
+    maximum_total_credentials=50,
+    identifiers=training_envs[0].identifiers
+)
 
 eval_agent(training_envs, test_envs, ep, "Random with PPO defender", defender=PPODefender(ep=ep, gamma=0.15, env=training_envs[0]))
 
-
+"""
 
 # COMPARING DEFENDERS
 

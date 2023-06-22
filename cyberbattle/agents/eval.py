@@ -4,7 +4,7 @@ import cyberbattle._env.cyberbattle_env as cyberbattle_env
 from cyberbattle._env.defender import ExternalRandomEvents, ScanAndReimageCompromisedMachines
 from cyberbattle.agents import test, train
 from cyberbattle.agents.compare.a2c.agent_actor_critic import ActorCriticPolicy
-from cyberbattle.agents.ppo_curiosity.agent_ppo_curiosity import PPOLearnerBetter
+from cyberbattle.agents.ppo_curiosity.agent_ppo_curiosity import PPOLearnerCuriosity
 import cyberbattle.agents.baseline.learner as learner
 import cyberbattle.agents.baseline.agent_wrapper as w
 import cyberbattle.agents.baseline.agent_dql as dqla
@@ -18,20 +18,20 @@ TRAINING_CHAIN_SIZE = 20
 TEST_CHAIN_SIZE = 16
 REWARD_GOAL = 2180
 OWN_ATLEAST_PERCENT = 1.0
-ngyms = 1
+ngyms = 3
 
 results = open("results.txt", "w")
 results.close()
 
 
 def eval_agent(training_envs, test_env, ep, network, defender=None):
-    agents = [(ActorCriticPolicy(ep, gamma=0.01, λ=0.1, learning_rate=0.1, hash_size=98689), "A2C"),
-              (SarsaLambdaPolicy(ep, gamma=0.015), "SARSA"),
-              (learner.RandomPolicy(), "Random"),
+    agents = [#(ActorCriticPolicy(ep, gamma=0.01, λ=0.1, learning_rate=0.1, hash_size=98689), "A2C"),
+              #(SarsaLambdaPolicy(ep, gamma=0.015), "SARSA"),
+              #(learner.RandomPolicy(), "Random"),
               (tql.QTabularLearner(ep=ep, gamma=0.015, learning_rate=0.01, exploit_percentile=100), "Tabular Q-Learning"),
-              (dqla.DeepQLearnerPolicy(ep=ep, gamma=0.015, replay_memory_size=10000, target_update=10, batch_size=512, learning_rate=0.01), "Deep Q-Learning"),
-             (ppo.PPOLearner(ep=ep, gamma=0.15), "PPO"),
-              (PPOLearnerBetter(ep=ep, gamma=0.15), "PPO Curiosity"),
+              #(dqla.DeepQLearnerPolicy(ep=ep, gamma=0.015, replay_memory_size=10000, target_update=10, batch_size=512, learning_rate=0.01), "Deep Q-Learning"),
+              #(ppo.PPOLearner(ep=ep, gamma=0.15), "PPO"),
+              #(PPOLearnerCuriosity(ep=ep, gamma=0.15), "PPO Curiosity"),
               ]
 
     trained_agents = []
@@ -217,7 +217,7 @@ test_env.seed(1)
 
 eval_agent(training_envs, test_env, ep, "Active directory with scan and compromise defender")
 
-"""
+
 # COMPARING DEFENDERS
 
 training_envs = [gym.make('CyberBattleChain-v0',
@@ -264,3 +264,79 @@ run = train.run(agent, test_env_2, ep, "Scan and compromise")
 all_runs.append(run)
 
 p.plot_averaged_cummulative_rewards(f"Chain cumulative training rewards", all_runs)
+"""
+env1 = gym.make("CyberBattleChain-v0",
+                size=32,
+                defender_constraint=cyberbattle_env.DefenderConstraint(
+                    maintain_sla=0.80
+                ))
+
+env2 = gym.make("ActiveDirectory-v2",
+                defender_constraint=cyberbattle_env.DefenderConstraint(
+                    maintain_sla=0.80
+                ))
+
+env3 = gym.make("CyberBattleRandom-v0", seed=1,
+                defender_constraint=cyberbattle_env.DefenderConstraint(
+                    maintain_sla=0.80
+                ))
+
+"""env2 = gym.make("CyberBattleRandom-v0", seed=30,
+                defender_constraint=cyberbattle_env.DefenderConstraint(
+                    maintain_sla=0.80
+                ))
+
+env3 = gym.make("CyberBattleRandom-v0", seed=16,
+                defender_constraint=cyberbattle_env.DefenderConstraint(
+                    maintain_sla=0.80
+                ))"""
+
+ep = w.EnvironmentBounds.of_identifiers(
+    maximum_total_credentials=22,
+    maximum_node_count=22,
+    identifiers=env1.identifiers
+)
+
+agent = ppo.PPOLearner(ep=ep, gamma=0.015)
+agent2 = PPOLearnerCuriosity(ep=ep, gamma=0.15)
+
+all_runs = []
+run = train.run(agent, env1, ep, "PPO")
+all_runs.append(run)
+run = train.run(agent2, env1, ep, "PPO with Curiosity")
+all_runs.append(run)
+p.plot_averaged_cummulative_rewards("PPO vs PPO with Curiosity - Chain", all_runs)
+
+
+ep = w.EnvironmentBounds.of_identifiers(
+    maximum_total_credentials=22,
+    maximum_node_count=22,
+    identifiers=env2.identifiers
+)
+
+agent = ppo.PPOLearner(ep=ep, gamma=0.015)
+agent2 = PPOLearnerCuriosity(ep=ep, gamma=0.15)
+
+all_runs = []
+run = train.run(agent, env2, ep, "PPO")
+all_runs.append(run)
+run = train.run(agent2, env2, ep, "PPO with Curiosity")
+all_runs.append(run)
+p.plot_averaged_cummulative_rewards("PPO vs PPO with Curiosity - Active Directory", all_runs)
+
+
+ep = w.EnvironmentBounds.of_identifiers(
+    maximum_total_credentials=22,
+    maximum_node_count=22,
+    identifiers=env3.identifiers
+)
+
+agent = ppo.PPOLearner(ep=ep, gamma=0.015)
+agent2 = PPOLearnerCuriosity(ep=ep, gamma=0.15)
+
+all_runs = []
+run = train.run(agent, env3, ep, "PPO")
+all_runs.append(run)
+run = train.run(agent2, env3, ep, "PPO with Curiosity")
+all_runs.append(run)
+p.plot_averaged_cummulative_rewards("PPO vs PPO with Curiosity - Random", all_runs)

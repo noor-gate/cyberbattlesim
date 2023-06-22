@@ -4,7 +4,7 @@ import cyberbattle._env.cyberbattle_env as cyberbattle_env
 from cyberbattle._env.defender import ExternalRandomEvents, ScanAndReimageCompromisedMachines
 from cyberbattle.agents import test, train
 from cyberbattle.agents.compare.a2c.agent_actor_critic import ActorCriticPolicy
-from cyberbattle.agents.ppo_curiosity.agent_ppo_curiosity import PPOLearnerBetter
+from cyberbattle.agents.ppo_curiosity.agent_ppo_curiosity import PPOLearnerCuriosity
 import cyberbattle.agents.baseline.learner as learner
 import cyberbattle.agents.baseline.agent_wrapper as w
 import cyberbattle.agents.baseline.agent_dql as dqla
@@ -31,7 +31,7 @@ def eval_agent(training_envs, test_envs, ep, network, defender=None):
               (tql.QTabularLearner(ep=ep, gamma=0.015, learning_rate=0.01, exploit_percentile=100), "Tabular Q-Learning"),
               (dqla.DeepQLearnerPolicy(ep=ep, gamma=0.015, replay_memory_size=10000, target_update=10, batch_size=512, learning_rate=0.01), "Deep Q-Learning"),
               (ppo.PPOLearner(ep=ep, gamma=0.15), "PPO"),
-              (PPOLearnerBetter(ep=ep, gamma=0.15), "PPO Curiosity"),
+              (PPOLearnerCuriosity(ep=ep, gamma=0.15), "PPO Curiosity"),
               ]
 
     trained_agents = []
@@ -41,7 +41,7 @@ def eval_agent(training_envs, test_envs, ep, network, defender=None):
     results.write("---- TRAINING ----\n\n\n")
 
     all_runs = []
-    
+
     for (agent, title) in agents:
         # Training loop for each agent
         rewards, lengths, direct_exploit_avg = [], [], []
@@ -111,6 +111,7 @@ def eval_agent(training_envs, test_envs, ep, network, defender=None):
     # p.plot_episodes_length(f"{network} test episode lengths", all_runs)"""
 
     results.close()
+
 
 """
 # CYBER BATTLE CHAIN

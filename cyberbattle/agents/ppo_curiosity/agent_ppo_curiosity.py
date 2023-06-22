@@ -91,14 +91,6 @@ class RolloutBuffer:
         del self.is_terminals[:]
 
 
-class Swish(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x):
-        return x * nn.Sigmoid()(x)
-
-
 class ActorCritic(nn.Module):
     """The Deep Neural Network used to estimate the Q function"""
 
@@ -144,7 +136,7 @@ class ActorCritic(nn.Module):
         return action_logprobs, state_values, dist_entropy
 
 
-class PPOLearnerBetter(Learner):
+class PPOLearnerCuriosity(Learner):
     def __init__(self,
                  ep: EnvironmentBounds, gamma: float):
         self.model = CyberBattleStateActionModel(ep)
@@ -152,15 +144,15 @@ class PPOLearnerBetter(Learner):
         self.policy = ActorCritic(len(self.model.state_space.dim_sizes), self.model.action_space.flat_size())
         self.buffer = RolloutBuffer()
         self.gamma = gamma
-        self.K_epochs = 40
-        self.eps_clip = 0.2
-        self.intr_reward_strength = 0.7
+        self.K_epochs = 50
+        self.eps_clip = 0.15
+        self.intr_reward_strength = 0.6
         self.lambd = 0.95
         self.ppo_batch_size = 1
-        self.icm_epochs = 40
+        self.icm_epochs = 50
         self.icm_batch_size = 1
         self.icm = ICM(len(self.model.state_space.dim_sizes), self.model.action_space.flat_size()).to(device)
-        lr_actor = 0.003       # learning rate for actor network
+        lr_actor = 0.002       # learning rate for actor network
         lr_critic = 0.001
         self.optimizer = torch.optim.Adam([
             {'params': self.policy.actor.parameters(), 'lr': lr_actor},
@@ -267,13 +259,10 @@ class PPOLearnerBetter(Learner):
         return None, None
     
     def update(self, timestep):
-        # Convert lists from memory to tensors
         self.timestep = timestep
         old_states = torch.stack(self.buffer.states).to(device).detach()
-        #old_states = torch.transpose(old_states, 0, 1)
         old_actions = torch.stack(self.buffer.actions).T.to(device).detach()
-        old_logprobs = torch.stack(self.buffer.logprobs).T.to(device).detach()
-        # Finding s, n_s, a, done, reward:
+        old_logprobs = torch.stack(self.buffer.logprobs).T.to(device).detach(
         curr_states = old_states[:-1, :]
         next_states = old_states[1:, :]
         actions = old_actions[:-1].long()
@@ -284,43 +273,20 @@ class PPOLearnerBetter(Learner):
         intr_rewards = torch.clamp(self.intr_reward_strength * intr_reward, 0, 1)
 
 
-        """print('Mean_intr_reward_per_1000_steps',
-                               intr_rewards.mean() * 1000,
-                               self.timestep
-                               )"""
-
-        # Finding comulitive advantage
         with torch.no_grad():
             state_values = torch.squeeze(self.policy.critic(curr_states))
             next_state_values = torch.squeeze(self.policy.critic(next_states))
             td_target = (rewards + intr_rewards) / 2 + self.gamma * next_state_values * mask
             delta = td_target - state_values
 
-            """print('maxValue',
-                                   state_values.max(),
-                                   timestep
-                                   )
-            print('meanValue',
-                                   state_values.mean(),
-                                   self.timestep
-                                   )"""
-
-            
-            #for i in range(delta.size(0) - 1, -1, -1):
-            #delta_t, mask_t = delta[:, i], mask[:, i]
             delta_t, mask_t = delta[:], mask[:]
             advantage = torch.zeros(1, delta_t.size(0)).to(device)
-            #print(delta_t.shape, advantage.shape, mask_t.shape)
             advantage_lst = []
             advantage = delta_t + (self.gamma * self.lambd * advantage) * mask_t
             advantage_lst.insert(0, advantage)
 
             advantage_lst = torch.cat(advantage_lst, dim=0)
-            # print(advantage_lst.shape)
-            # Get local advantage to train value function
             local_advantages = state_values + advantage_lst
-            # print(local_advantages.shape)
-            # Normalizing the advantage
             advantages = (advantage_lst - advantage_lst.mean()) / (advantage_lst.std() + 1e-10)
 
         # Optimize policy for ppo epochs:
@@ -331,30 +297,19 @@ class PPOLearnerBetter(Learner):
             for i in range(0, len(indexes), len(indexes)):
                 # print(curr_states.shape, actions.shape, mask.shape, advantages.shape, local_advantages.shape, old_logprobs.shape)
                 batch_ind = indexes[i:i + self.ppo_batch_size]
-                batch_curr_states = curr_states[batch_ind, :]
-                batch_actions = actions[batch_ind]
                 batch_mask = mask[batch_ind]
-                batch_advantages = advantages[:, batch_ind]
-                batch_local_advantages = local_advantages[:, batch_ind]
                 batch_old_logprobs = old_logprobs[batch_ind]
-                
 
-                # Finding actions logprobs and states values
                 batch_logprobs, batch_state_values, batch_dist_entropy = self.policy.evaluate(curr_states,
                                                                                               actions)
 
-                # Finding the ratio (pi_theta / pi_theta__old):
                 ratios = torch.exp(batch_logprobs - batch_old_logprobs.detach())
-
-                # Apply leaner decay and multiply 16 times cause agents_batch is 16 long
                 decay_epsilon = linear_decay_eps(self.timestep * 16)
                 decay_beta = linear_decay_beta(self.timestep * 16)
 
-                # Finding Surrogate Loss:
                 surr1 = ratios * advantages
                 surr2 = torch.clamp(ratios, 1 - decay_epsilon, 1 + decay_epsilon) * advantages
-                # print(batch_state_values.shape,
-                #     batch_local_advantages.detach().shape)
+
                 loss = -torch.min(surr1, surr2) * batch_mask + \
                     0.5 * nn.MSELoss(reduction='none')(batch_state_values.T,
                                                        local_advantages.detach()) * batch_mask - \
@@ -369,16 +324,8 @@ class PPOLearnerBetter(Learner):
                 epoch_surr_loss += loss.item()
 
         self._icm_update(self.icm_epochs, self.icm_batch_size, curr_states, next_states, actions, mask)
-        """print('Lr',
-                               self.optimizer.param_groups[0]['lr'],
-                               self.timestep
-                               )
-        print('Surrogate_loss',
-                               epoch_surr_loss / (self.ppo_epochs * (len(indexes) // self.ppo_batch_size + 1)),
-                               self.timestep
-                               )"""
+ 
 
-        # Copy new weights into old policy:
         self.policy_old.load_state_dict(self.policy.state_dict())
 
     def _icm_update(self, epochs, batch_size, curr_states, next_states, actions, mask):
@@ -401,16 +348,7 @@ class PPOLearnerBetter(Learner):
                 epoch_inv_loss += inv_loss.item()
                 unclip_intr_loss = 10 * (0.2 * forw_loss + 0.8 * inv_loss)
 
-                # take gradient step
                 self.optimizer_icm.zero_grad()
                 unclip_intr_loss.backward()
                 self.optimizer_icm.step()
                 linear_decay_lr(self.optimizer_icm, self.timestep * 16)
-        """print('Forward_loss',
-                               epoch_forw_loss / (epochs * (len(indexes) // batch_size + 1)),
-                               self.timestep
-                               )
-        print('Inv_loss',
-                                epoch_inv_loss / (epochs * (len(indexes) // batch_size + 1)),
-                                self.timestep
-                                )"""
